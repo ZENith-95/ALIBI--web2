@@ -1,0 +1,21 @@
+type Profile = record {
+  username: text;
+  bio: text;
+};
+
+type GetProfileError = variant {
+  userNotAuthenticated;
+  profileNotFound;
+};
+
+type CreateProfileError = variant {
+  userNotAuthenticated;
+  profileAlreadyExists;
+};
+
+service : {
+  getProfile: () -> (variant { ok: Profile; err: GetProfileError }) query;
+  createProfile: (text, text) -> (variant { ok: bool; err: CreateProfileError });
+  updateProfile: (text, text) -> (variant { ok: bool; err: variant { userNotAuthenticated; profileNotFound; } });
+  getProfileByPrincipal: (principal) -> (opt Profile) query;
+} 

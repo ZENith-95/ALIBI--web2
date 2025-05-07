@@ -1,0 +1,41 @@
+type TicketId = text;
+type EventId = text;
+type TicketTypeId = text;
+
+type Ticket = record {
+  id: TicketId;
+  eventId: EventId;
+  ticketTypeId: TicketTypeId;
+  owner: principal;
+  isUsed: bool;
+  metadata: TicketMetadata;
+  mintedAt: int;
+};
+
+type TicketMetadata = record {
+  name: text;
+  description: text;
+  imageUrl: opt text;
+  attributes: vec record { text; text; };
+};
+
+type VerifyTicketRequest = record {
+  ticketId: TicketId;
+};
+
+type VerifyTicketError = variant {
+  userNotAuthenticated;
+  ticketNotFound;
+  eventNotFound;
+  eventNotActive;
+  systemError;
+};
+
+service : {
+  getTicket: (TicketId) -> (opt Ticket) query;
+  getUserTickets: () -> (vec Ticket) query;
+  isTicketValid: (TicketId) -> (bool) query;
+  verifyTicket: (VerifyTicketRequest) -> (variant { ok: bool; err: VerifyTicketError });
+  transferTicket: (TicketId, principal) -> (variant { ok: bool; err: variant { ticketNotFound; userNotAuthenticated; systemError; } });
+  mintTicket: (EventId, TicketTypeId, principal, TicketMetadata) -> (variant { ok: TicketId; err: variant { userNotAuthenticated; systemError; } });
+} 

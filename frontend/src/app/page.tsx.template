@@ -1,0 +1,18 @@
+import { DebugAuthButton } from '@/components/debug-auth-button'
+
+export default function Home() {
+  return (
+    <main className="container mx-auto py-8">
+      <div className="bg-muted p-4 rounded-lg mb-6">
+        <h2 className="text-lg font-semibold mb-2">Authentication Debug</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Use these buttons to test Internet Identity authentication
+        </p>
+        <DebugAuthButton />
+      </div>
+      
+      {/* Your existing page content */}
+      
+    </main>
+  )
+} 
