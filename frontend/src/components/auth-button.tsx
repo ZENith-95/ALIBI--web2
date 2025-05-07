@@ -2,90 +2,89 @@
 
 import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
-import { LogIn, LogOut, Loader2 } from "lucide-react";
-import { AuthClient } from "@dfinity/auth-client";
-import { icApi } from "../lib/ic-api";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { LogIn, LogOut, Loader2, UserCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "./ui/dialog";
+import { getCurrentUser, signInWithEmail, signOut, onAuthStateChange } from "../../auth"; // Adjusted path
+import { User } from "@supabase/supabase-js";
 
 export function AuthButton() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [principalId, setPrincipalId] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    checkAuth();
+    const checkCurrentUser = async () => {
+      setIsLoading(true);
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      setIsLoading(false);
+    };
+
+    checkCurrentUser();
+
+    const authListener = onAuthStateChange((event, session) => {
+      console.log("Auth event:", event, session);
+      setCurrentUser(session?.user ?? null);
+      if (event === "SIGNED_IN") {
+        setIsDialogOpen(false); // Close dialog on successful sign-in
+      }
+    });
+
+    return () => {
+      authListener.subscription?.unsubscribe();
+    };
   }, []);
 
-  const checkAuth = async () => {
-    try {
-      const authClient = await AuthClient.create();
-      const authenticated = await authClient.isAuthenticated();
-      setIsAuthenticated(authenticated);
-
-      if (authenticated) {
-        const identity = authClient.getIdentity();
-        const principal = identity.getPrincipal();
-        setPrincipalId(principal.toString());
-        
-        // Update the IC API with the authenticated identity
-        await icApi.updateIdentity(identity);
-      }
-    } catch (error) {
-      console.error("Error checking authentication:", error);
-    }
-  };
-
-  const login = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
-    try {
-      const authClient = await AuthClient.create();
-      
-      // Start the login flow
-      await new Promise<void>((resolve) => {
-        authClient.login({
-          identityProvider: process.env.NEXT_PUBLIC_INTERNET_IDENTITY_URL,
-          onSuccess: () => resolve(),
-          onError: (error) => {
-            console.error("Login failed:", error);
-            setIsLoading(false);
-          },
-        });
-      });
-
-      await checkAuth();
-    } catch (error) {
-      console.error("Error during login:", error);
-    } finally {
-      setIsLoading(false);
+    setAuthError(null);
+    const { error } = await signInWithEmail({ email, password });
+    setIsLoading(false);
+    if (error) {
+      setAuthError(error.message);
+      console.error("Login failed:", error);
+    } else {
+      setEmail("");
+      setPassword("");
+      // User state will be updated by onAuthStateChange
     }
   };
 
-  const logout = async () => {
+  const handleLogout = async () => {
     setIsLoading(true);
-    try {
-      const authClient = await AuthClient.create();
-      await authClient.logout();
-      setIsAuthenticated(false);
-      setPrincipalId(null);
-      
-      // Reset the IC API to use anonymous identity
-      await icApi.updateIdentity(null);
-    } catch (error) {
-      console.error("Error during logout:", error);
-    } finally {
-      setIsLoading(false);
+    setAuthError(null);
+    const { error } = await signOut();
+    setIsLoading(false);
+    if (error) {
+      setAuthError(error.message);
+      console.error("Logout failed:", error);
     }
+    // User state will be updated by onAuthStateChange
   };
+
+  if (isLoading && !currentUser) {
+    return (
+      <Button variant="outline" size="sm" disabled>
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Loading...
+      </Button>
+    );
+  }
 
   return (
     <div>
-      {isAuthenticated ? (
-        <div className="flex flex-col items-end">
-          {principalId && (
-            <p className="text-xs text-muted-foreground mb-1">
-              {principalId.substring(0, 5)}...{principalId.substring(principalId.length - 5)}
-            </p>
-          )}
-          <Button onClick={logout} variant="outline" size="sm" disabled={isLoading}>
+      {currentUser ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground hidden sm:inline">
+            {currentUser.email?.substring(0, currentUser.email.indexOf('@'))}
+          </span>
+          <Button onClick={handleLogout} variant="outline" size="sm" disabled={isLoading}>
             {isLoading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -95,15 +94,69 @@ export function AuthButton() {
           </Button>
         </div>
       ) : (
-        <Button onClick={login} variant="outline" size="sm" disabled={isLoading}>
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <LogIn className="mr-2 h-4 w-4" />
-          )}
-          Login with Internet Identity
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <LogIn className="mr-2 h-4 w-4" />
+              Login
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Login</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleLogin}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="email-login" className="text-right">
+                    Email
+                  </Label>
+                  <Input
+                    id="email-login"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="password-login" className="text-right">
+                    Password
+                  </Label>
+                  <Input
+                    id="password-login"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <p className="col-span-4 text-red-500 text-sm text-center">{authError}</p>
+                )}
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                   <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+                  Login
+                </Button>
+              </DialogFooter>
+            </form>
+            {/* Basic Sign Up link - can be expanded later */}
+            <p className="text-center text-sm mt-4">
+              Don't have an account?{' '}
+              <Button variant="link" className="p-0 h-auto" onClick={() => alert("Sign up functionality to be implemented")}>
+                Sign Up
+              </Button>
+            </p>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
-} 
+}

@@ -3,8 +3,6 @@ import type React from "react";
 import "./globals.css";
 import { ThemeProvider } from "../components/theme-provider";
 import { Toaster } from "../components/ui/toaster";
-import { WalletProvider } from "../components/wallet-provider";
-import { authenticateWithII } from "../../auth";
 
 export const metadata = {
   title: "Alibi - NFT Ticketing Platform",
@@ -18,30 +16,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Add a script to detect wallet extensions without modifying window.ethereum */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.hasIcWallets = false;
-              try {
-                window.hasIcWallets = !!(window.ic?.plug || window.ic?.internetIdentity);
-              } catch (e) {
-                console.error("Error checking for IC wallets:", e);
-              }
-            `,
-          }}
-        />
-      </head>
+      <head></head>
       <body className={`font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <WalletProvider>
-            {children}
-            <Toaster />
-          </WalletProvider>
+          {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
   );
 }
-

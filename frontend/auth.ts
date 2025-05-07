@@ -1,17 +1,46 @@
-import { AuthClient } from "@dfinity/auth-client";
+import { supabase } from './src/lib/supabase'; // Adjusted path to supabase client
+import { SignInWithPasswordCredentials, SignUpWithPasswordCredentials } from '@supabase/supabase-js';
 
-export async function authenticateWithII(): Promise<string | null> {
-  const authClient = await AuthClient.create();
-  if (await authClient.isAuthenticated()) {
-    return authClient.getIdentity().getPrincipal().toText();
+export async function signUpWithEmail(credentials: SignUpWithPasswordCredentials) {
+  const { data, error } = await supabase.auth.signUp(credentials);
+  if (error) {
+    console.error('Error signing up:', error);
+    return { user: null, error };
   }
+  return { user: data.user, error: null };
+}
 
-  await authClient.login({
-    identityProvider: "https://identity.ic0.app",
-    onSuccess: () => {
-      console.log("Authenticated successfully!");
-    },
-  });
+export async function signInWithEmail(credentials: SignInWithPasswordCredentials) {
+  const { data, error } = await supabase.auth.signInWithPassword(credentials);
+  if (error) {
+    console.error('Error signing in:', error);
+    return { user: null, error };
+  }
+  return { user: data.user, error: null };
+}
 
-  return authClient.getIdentity().getPrincipal().toText();
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error('Error signing out:', error);
+    return { error };
+  }
+  return { error: null };
+}
+
+export async function getCurrentUser() {
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    console.error('Error getting session:', sessionError);
+    return null;
+  }
+  if (!session) {
+    return null;
+  }
+  return session.user;
+}
+
+export function onAuthStateChange(callback: (event: string, session: any) => void) {
+  const { data: authListener } = supabase.auth.onAuthStateChange(callback);
+  return authListener;
 }

@@ -8,65 +8,107 @@ import { Calendar, Plus, Ticket, Users, TrendingUp, QrCode } from "lucide-react"
 import { Progress } from "../ui/progress"
 import { Skeleton } from "../ui/skeleton"
 import Link from "next/link"
-import { EventList } from "../organizer/event-list"
-import { EventAnalytics } from "../organizer/event-analytics"
-import { icApi } from "../../lib/ic-api"
+import { EventList } from "./event-list" // Adjusted path
+import { EventAnalytics } from "./event-analytics" // Adjusted path
+import { supabaseApi, Event as OrganizerEvent } from "../../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and Event type
+import { getCurrentUser, onAuthStateChange } from "../../../auth";
+import { User, Session } from "@supabase/supabase-js";
 
-// Map backend event to frontend event display format
-const mapEventToDisplay = (event: any) => {
-  const totalCapacity = event.ticketTypes.reduce(
-    (sum: number, tt: any) => sum + Number(tt.capacity), 
-    0
-  );
-  
-  const ticketsSold = event.ticketTypes.reduce(
-    (sum: number, tt: any) => sum + Number(tt.sold), 
-    0
-  );
-  
+// Map Supabase event to frontend event display format
+const mapEventToDisplay = (event: OrganizerEvent) => {
+  // totalCapacity and ticketsSold are already calculated in supabaseApi.mapSupabaseEventToFrontend
   return {
     id: event.id.toString(),
     name: event.name,
     date: event.date,
     time: event.time,
     location: event.location,
-    capacity: totalCapacity,
-    ticketsSold: ticketsSold,
-    imageUrl: event.imageUrl || `/placeholder.svg?height=400&width=800&text=${encodeURIComponent(event.name)}`,
-    artStyle: event.artStyle,
+    capacity: event.totalCapacity,
+    ticketsSold: event.ticketsSold,
+    imageUrl: event.image_url || `/placeholder.svg?height=400&width=800&text=${encodeURIComponent(event.name)}`,
+    artStyle: event.art_style,
   };
 };
 
 export function OrganizerDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [events, setEvents] = useState<any[]>([])
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch events from the canister
-    const fetchEvents = async () => {
-      setIsLoading(true)
-      
-      try {
-        const backendEvents = await icApi.getOrganizerEvents();
-        const formattedEvents = backendEvents.map(mapEventToDisplay);
-        setEvents(formattedEvents);
-      } catch (error) {
-        console.error("Error fetching events:", error);
+    const checkUserAndFetchEvents = async () => {
+      setIsLoading(true);
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+
+      if (user) {
+        try {
+          const backendEvents = await supabaseApi.getOrganizerEvents(user.id);
+          const formattedEvents = backendEvents.map(mapEventToDisplay);
+          setEvents(formattedEvents);
+          setError(null);
+        } catch (err) {
+          console.error("Error fetching events:", err);
+          setEvents([]);
+          setError("Failed to load events.");
+        }
+      } else {
+        setEvents([]); // No user, no events
+      }
+      setIsLoading(false);
+    };
+
+    checkUserAndFetchEvents();
+
+    const authListener = onAuthStateChange(async (event: string, session: Session | null) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setIsLoading(true);
+        try {
+          const backendEvents = await supabaseApi.getOrganizerEvents(user.id);
+          const formattedEvents = backendEvents.map(mapEventToDisplay);
+          setEvents(formattedEvents);
+          setError(null);
+        } catch (err) {
+          console.error("Error fetching events on auth change:", err);
+          setEvents([]);
+          setError("Failed to load events.");
+        }
+        setIsLoading(false);
+      } else {
         setEvents([]);
       }
-      
-      setIsLoading(false);
-    }
+    });
 
-    fetchEvents()
-  }, [])
+    return () => {
+      authListener.subscription?.unsubscribe();
+    };
+  }, []);
 
   // Calculate dashboard stats
   const totalTicketsSold = events.reduce((sum, event) => sum + event.ticketsSold, 0)
   const totalCapacity = events.reduce((sum, event) => sum + event.capacity, 0)
   const percentageSold = totalCapacity > 0 ? Math.round((totalTicketsSold / totalCapacity) * 100) : 0
-  const activeEvents = events.filter((event) => new Date(event.date) >= new Date()).length
+  const activeEvents = events.filter((event) => {
+    const eventDate = new Date(event.date);
+    // Consider time as well if available, for now just date
+    return eventDate >= new Date(new Date().toDateString()); // Compare date part only
+  }).length;
 
+
+  if (!currentUser && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <h2 className="text-2xl font-bold mb-2">Login to View Dashboard</h2>
+        <p className="text-muted-foreground max-w-md mb-6">
+          Please log in to access the organizer dashboard.
+        </p>
+      </div>
+    );
+  }
+  
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -90,6 +132,10 @@ export function OrganizerDashboard() {
           </div>
           <Skeleton className="h-[500px] rounded-lg" />
         </>
+      ) : error ? (
+         <div className="flex flex-col items-center justify-center py-16 text-center">
+            <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
+         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -132,7 +178,7 @@ export function OrganizerDashboard() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Attendees</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Attendees (Sold)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center">
@@ -141,7 +187,7 @@ export function OrganizerDashboard() {
                 </div>
                 <div className="flex items-center mt-2 text-sm text-muted-foreground">
                   <QrCode className="h-4 w-4 mr-1" />
-                  <span>0 checked in</span>
+                  <span>0 checked in (feature TBD)</span>
                 </div>
               </CardContent>
             </Card>
@@ -166,4 +212,3 @@ export function OrganizerDashboard() {
     </div>
   )
 }
-
