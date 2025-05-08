@@ -4,49 +4,41 @@ import { useState, useEffect } from "react"
 import { TicketCard } from "./ticket-card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs"
 import { Skeleton } from "./ui/skeleton"
-import { useWallet } from "./wallet-provider"
 import { Button } from "./ui/button"
-import { Ticket } from "lucide-react"
+import { Ticket as TicketIcon } from "lucide-react" // Renamed to avoid conflict with Ticket type
 import Link from "next/link"
-import { icApi } from "../lib/ic-api"
+import { supabaseApi, Ticket } from "../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and types
+import { getCurrentUser, onAuthStateChange } from "../../auth";
+import { User, Session } from "@supabase/supabase-js";
 
-// Map backend ticket to frontend ticket display format
-const mapTicketToDisplay = (ticket: any) => {
-  // Find the 'event' attribute from metadata
-  const eventName = ticket.metadata.attributes.find(
-    (attr: [string, string]) => attr[0] === "event"
-  )?.[1] || ticket.metadata.name;
-  
-  // Find the date and time attributes
-  const eventDate = ticket.metadata.attributes.find(
-    (attr: [string, string]) => attr[0] === "date"
-  )?.[1] || "";
-  
-  const eventTime = ticket.metadata.attributes.find(
-    (attr: [string, string]) => attr[0] === "time"
-  )?.[1] || "";
-  
-  const eventLocation = ticket.metadata.attributes.find(
-    (attr: [string, string]) => attr[0] === "location"
-  )?.[1] || "";
+// Map Supabase ticket to frontend ticket display format
+const mapTicketToDisplay = (ticket: Ticket) => {
+  // Metadata structure might differ with Supabase, adjust as needed
+  const eventName = ticket.metadata?.name || "Event Ticket";
+  const eventDate = ticket.metadata?.attributes?.find(
+    (attr: {trait_type: string, value: string}) => attr.trait_type === "Date"
+  )?.value || "";
+  const eventTime = ticket.metadata?.attributes?.find(
+    (attr: {trait_type: string, value: string}) => attr.trait_type === "Time"
+  )?.value || "";
+  const eventLocation = ticket.metadata?.attributes?.find(
+    (attr: {trait_type: string, value: string}) => attr.trait_type === "Location"
+  )?.value || "";
+  const qrHash = ticket.metadata?.qrHash || ""; // Assuming qrHash might be part of metadata
 
-  const qrHash = ticket.metadata.attributes.find(
-    (attr: [string, string]) => attr[0] === "qrHash"
-  )?.[1] || "";
-  
   return {
     id: ticket.id.toString(),
-    eventId: ticket.eventId.toString(),
+    eventId: ticket.event_id.toString(),
     eventName,
     eventDate,
     eventTime,
     eventLocation,
-    imageUrl: ticket.metadata.imageUrl || "/placeholder.svg?height=300&width=200&text=" + encodeURIComponent(eventName),
-    status: ticket.isUsed ? "used" : "active",
+    imageUrl: ticket.metadata?.imageUrl || "/placeholder.svg?height=300&width=200&text=" + encodeURIComponent(eventName),
+    status: ticket.is_used ? "used" : "active",
     qrHash,
-    unlockables: {
+    unlockables: { // This might need to be re-evaluated based on Supabase data
       total: 3,
-      unlocked: ticket.isUsed ? 3 : 1,
+      unlocked: ticket.is_used ? 3 : 1,
     },
   };
 };
@@ -54,50 +46,82 @@ const mapTicketToDisplay = (ticket: any) => {
 export function TicketGallery() {
   const [tickets, setTickets] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { isConnected } = useWallet()
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch tickets from the canister
-    const fetchTickets = async () => {
-      setIsLoading(true)
-      
-      if (isConnected) {
+    const checkUserAndFetchTickets = async () => {
+      setIsLoading(true);
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+
+      if (user) {
         try {
-          const backendTickets = await icApi.getUserTickets();
+          const backendTickets = await supabaseApi.getUserTickets(user.id);
           const formattedTickets = backendTickets.map(mapTicketToDisplay);
           setTickets(formattedTickets);
-        } catch (error) {
-          console.error("Error fetching tickets:", error);
+          setError(null);
+        } catch (err) {
+          console.error("Error fetching tickets:", err);
           setTickets([]);
+          setError("Failed to load tickets.");
         }
+      } else {
+        setTickets([]); // No user, no tickets
+      }
+      setIsLoading(false);
+    };
+
+    checkUserAndFetchTickets();
+
+    const authListener = onAuthStateChange(async (event: string, session: Session | null) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setIsLoading(true);
+        try {
+          const backendTickets = await supabaseApi.getUserTickets(user.id);
+          const formattedTickets = backendTickets.map(mapTicketToDisplay);
+          setTickets(formattedTickets);
+          setError(null);
+        } catch (err) {
+          console.error("Error fetching tickets on auth change:", err);
+          setTickets([]);
+          setError("Failed to load tickets.");
+        }
+        setIsLoading(false);
       } else {
         setTickets([]);
       }
-      
-      setIsLoading(false);
-    }
+    });
 
-    fetchTickets()
-  }, [isConnected])
+    return () => {
+      authListener.subscription?.unsubscribe();
+    };
+  }, []);
 
-  const upcomingTickets = tickets.filter((ticket) => new Date(ticket.eventDate) >= new Date())
-  const pastTickets = tickets.filter((ticket) => new Date(ticket.eventDate) < new Date())
+  const upcomingTickets = tickets.filter((ticket) => {
+    const eventDateTime = new Date(`${ticket.eventDate} ${ticket.eventTime || '00:00:00'}`);
+    return eventDateTime >= new Date();
+  });
+  const pastTickets = tickets.filter((ticket) => {
+    const eventDateTime = new Date(`${ticket.eventDate} ${ticket.eventTime || '00:00:00'}`);
+    return eventDateTime < new Date();
+  });
 
-  if (!isConnected) {
+  if (!currentUser && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-secondary/50 rounded-full p-6 mb-6">
-          <Ticket className="h-12 w-12 text-primary" />
+          <TicketIcon className="h-12 w-12 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
+        <h2 className="text-2xl font-bold mb-2">Login to View Your Tickets</h2>
         <p className="text-muted-foreground max-w-md mb-6">
-          Connect your wallet to view your NFT tickets and manage your event RSVPs.
+          Please log in to see your tickets and manage your event RSVPs.
         </p>
-        <Button asChild>
-          <Link href="/">Browse Events</Link>
-        </Button>
+        {/* The AuthButton in the header should handle login */}
       </div>
-    )
+    );
   }
 
   if (isLoading) {
@@ -124,24 +148,35 @@ export function TicketGallery() {
           </div>
         </Tabs>
       </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
+        <p className="text-muted-foreground max-w-md mb-6">
+          There was an issue loading your tickets. Please try again later.
+        </p>
+      </div>
     )
   }
 
-  if (tickets.length === 0) {
+  if (tickets.length === 0 && currentUser) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-secondary/50 rounded-full p-6 mb-6">
-          <Ticket className="h-12 w-12 text-primary" />
+          <TicketIcon className="h-12 w-12 text-primary" />
         </div>
         <h2 className="text-2xl font-bold mb-2">No Tickets Found</h2>
         <p className="text-muted-foreground max-w-md mb-6">
-          You haven't RSVP'd to any events yet. Browse upcoming events and get your first NFT ticket.
+          You haven't acquired any tickets yet. Browse upcoming events and get your first ticket.
         </p>
         <Button asChild>
           <Link href="/">Browse Events</Link>
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -186,6 +221,5 @@ export function TicketGallery() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
-

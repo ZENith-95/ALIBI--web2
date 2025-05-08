@@ -2,80 +2,84 @@
 
 import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
-import { LogIn, LogOut, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { LogIn, LogOut, Loader2, UserCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "./ui/dialog";
 import useAuthStore from "../hooks/useAuth";
 
 export function AuthButton() {
-
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const authState = useAuthStore();
-  const isAuthenticated = authState.isAuthenticated;
-  const [isLoading, setIsLoading] = useState(false);
-  const [principalId, setPrincipalId] = useState<string | null>(null);
-  const router = useRouter();
+  const authenticated = authState.isAuthenticated;
+  // useEffect(() => {
+  //   const checkCurrentUser = async () => {
+  //     setIsLoading(true);
+  //     const user = await getCurrentUser();
+  //     setCurrentUser(user);
+  //     setIsLoading(false);
+  //   };
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  //   checkCurrentUser();
 
- 
-  const checkAuth = async () => {
-    try {
-      // const authClient = await AuthClient.create();
-      // const authenticated = await authClient.isAuthenticated();
-      // setIsAuthenticated(authenticated);
+  //   const authListener = onAuthStateChange((event, session) => {
+  //     console.log("Auth event:", event, session);
+  //     setCurrentUser(session?.user ?? null);
+  //     if (event === "SIGNED_IN") {
+  //       setIsDialogOpen(false); // Close dialog on successful sign-in
+  //     }
+  //   });
 
-      // if (authenticated) {
-      //   const identity = authClient.getIdentity();
-      //   const principal = identity.getPrincipal();
-      //   setPrincipalId(principal.toString());
+  //   return () => {
+  //     authListener.subscription?.unsubscribe();
+  //   };
+  // }, []);
 
-      // Update the IC API with the authenticated identity
-      // await icApi.updateIdentity(identity);
-      // }
-    } catch (error) {
-      console.error("Error checking authentication:", error);
-    }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    await authState.login(email, password);
+    // if (error) {
+    // setAuthError(error.message);
+    // console.error("Login failed:", error);
+    // } else {
+    // setEmail("");
+    // setPassword("");
+    // User state will be updated by onAuthStateChange
+    // }
   };
 
-  const login = async () => {
-    try {
-      router.push("/signin");
-    } catch (error) {
-      console.error("Error during login:", error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleLogout = async () => {
+    setAuthError(null);
+    // const { error } = await signOut();
+    // if (error) {
+    //   setAuthError(error.message);
+    //   console.error("Logout failed:", error);
+    // }
+    // User state will be updated by onAuthStateChange
   };
 
-  const logout = async () => {
-    setIsLoading(true);
-    try {
-      /*const authClient = await AuthClient.create();
-      await authClient.logout();
-      setIsAuthenticated(false);
-      setPrincipalId(null);
-
-      // Reset the IC API to use anonymous identity
-      await icApi.updateIdentity(null);*/
-    } catch (error) {
-      console.error("Error during logout:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (authState.processing && !authenticated) {
+    return (
+      <Button variant="outline" size="sm" disabled>
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Loading...
+      </Button>
+    );
+  }
 
   return (
     <div>
-      {isAuthenticated ? (
-        <div className="flex flex-col items-end">
-          {principalId && (
-            <p className="text-xs text-muted-foreground mb-1">
-              {principalId.substring(0, 5)}...{principalId.substring(principalId.length - 5)}
-            </p>
-          )}
-          <Button onClick={logout} variant="outline" size="sm" disabled={isLoading}>
-            {isLoading ? (
+      {authenticated ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground hidden sm:inline">
+            {authState.email?.substring(0, authState.email.indexOf('@'))}
+          </span>
+          <Button onClick={handleLogout} variant="outline" size="sm" disabled={authState.processing}>
+            {authState.processing ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <LogOut className="mr-2 h-4 w-4" />
@@ -84,15 +88,69 @@ export function AuthButton() {
           </Button>
         </div>
       ) : (
-        <Button onClick={login} variant="outline" size="sm" disabled={isLoading}>
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <LogIn className="mr-2 h-4 w-4" />
-          )}
-          Login
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <LogIn className="mr-2 h-4 w-4" />
+              Login
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Login</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleLogin}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="email-login" className="text-right">
+                    Email
+                  </Label>
+                  <Input
+                    id="email-login"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="password-login" className="text-right">
+                    Password
+                  </Label>
+                  <Input
+                    id="password-login"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <p className="col-span-4 text-red-500 text-sm text-center">{authError}</p>
+                )}
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={authState.processing}>
+                  {authState.processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+                  Login
+                </Button>
+              </DialogFooter>
+            </form>
+            {/* Basic Sign Up link - can be expanded later */}
+            <p className="text-center text-sm mt-4">
+              Don't have an account?{' '}
+              <Button variant="link" className="p-0 h-auto" onClick={() => alert("Sign up functionality to be implemented")}>
+                Sign Up
+              </Button>
+            </p>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
-} 
+}

@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { EventCard } from "./event-card"
+import { EventCard } from "../components/event-card"
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Search, Filter } from "lucide-react"
 import { Skeleton } from "./ui/skeleton"
-import { icApi, type Event } from "../lib/ic-api"
+import { supabaseApi, type Event } from "../lib/supabaseApi" // Updated import
 
 export function EventDiscovery() {
   const [events, setEvents] = useState<Event[]>([])
@@ -16,11 +16,11 @@ export function EventDiscovery() {
   const [artStyle, setArtStyle] = useState("all")
 
   useEffect(() => {
-    // Fetch events from the IC backend
+    // Fetch events from Supabase
     const fetchEvents = async () => {
       setIsLoading(true)
       try {
-        const fetchedEvents = await icApi.getAllEvents()
+        const fetchedEvents = await supabaseApi.getAllEvents() // Use supabaseApi
         setEvents(fetchedEvents)
       } catch (error) {
         console.error("Error fetching events:", error)
@@ -36,7 +36,7 @@ export function EventDiscovery() {
     const matchesSearch =
       event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.location.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStyle = artStyle === "all" || event.artStyle.toLowerCase() === artStyle.toLowerCase()
+    const matchesStyle = artStyle === "all" || event.art_style.toLowerCase() === artStyle.toLowerCase() // Use art_style
     return matchesSearch && matchesStyle
   })
 
@@ -109,4 +109,3 @@ export function EventDiscovery() {
     </section>
   )
 }
-

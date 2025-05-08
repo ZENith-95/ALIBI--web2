@@ -1,33 +1,38 @@
 import { create } from 'zustand'
-import { supabaseSignin } from '../utils/supabase/auth';
+import { loginUser, logoutUser } from '../utils/pocketbase/auth';
 
 interface AuthState {
     email?: string;
     token?: string;
     isAuthenticated: boolean;
+    processing: boolean;
 
 }
 interface AuthActions {
-    login: (email: string, password: string) => void;
-    logout: () => void;
+    login: (email: string, password: string) => Promise<void>;
+    logout: () => Promise<void>;
 }
 const initialState: AuthState = {
     isAuthenticated: false,
-
+    processing: false,
 }
 const useAuthStore = create<AuthState & AuthActions>((set) => ({
     ...initialState,
     login: async (email: string, password: string) => {
         try {
-            const data = await supabaseSignin(email, password);
-            set({ email: data.user.email, isAuthenticated: true, token: data.session.access_token })
+            set({ processing: true });
+            const data = await loginUser(email, password);
+
+            set({ email: data.record.email, isAuthenticated: true, token: data.token, processing: false });
         } catch (e) {
             console.log("Error logging in:", e);
+            console.error(e);
             console.log(e);
+            set({ processing: false });
         }
     },
     logout: async () => {
-        // await supabaseSignOut();
+        await logoutUser();
         set({ email: undefined, isAuthenticated: false, token: undefined })
     }
 }))
