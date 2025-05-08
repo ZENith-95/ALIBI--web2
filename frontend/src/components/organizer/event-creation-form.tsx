@@ -114,7 +114,8 @@ export function EventCreationForm() {
             errorMessage = `System error: ${result.error.details || 'Please try again later.'}`;
             break;
           default:
-            errorMessage = `An unexpected error occurred: ${result.error.details || ''}`;
+             // For other error types that don't have 'details'
+             errorMessage = `An unexpected error occurred. Error type: ${result.error.type}`;
         }
         
         toast({

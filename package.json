@@ -15,9 +15,9 @@
     "typescript"
   ],
   "scripts": {
+    "dev": "npx turbo run dev --filter=frontend",
     "build": "turbo run build",
-    "preclean": "turbo run clean",
-    "clean": "rm -rf .dfx && rm -rf .turbo && rm -rf node_modules & rm -rf src/declarations"
+    "clean": "npx turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "4.3.0",
