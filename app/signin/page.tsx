@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "../components/ui/button"
 import useAuthStore from "../hooks/useAuth"
 import { useRouter } from "next/navigation";
+import { signup } from "./actions";
 
 export default function SignInPage() {
     return <div className="mx-auto">
@@ -25,13 +26,12 @@ function SignInForm() {
         }
 
     }
-    return <form>
-        <div className="flex flex-col gap-y-10 mx-auto w-full">
-            <input onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" />
-            <input onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
-            <Button onClick={login}>
-                Login
-            </Button>
-        </div>
+    return <form className="flex flex-col gap-y-10 mx-auto w-full">
+        <label htmlFor="email">Email:</label>
+        <input onChange={(e) => setEmail(e.target.value)} id="email" name="email" type="email" required />
+        <label htmlFor="password">Password:</label>
+        <input onChange={(e) => setPassword(e.target.value)} id="password" name="password" type="password" required />      <button formAction={login}>Log in</button>
+        <button formAction={signup}>Sign up</button>
+   
     </form>
 }

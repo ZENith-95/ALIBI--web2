@@ -1,6 +1,5 @@
-import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient';
 import { create } from 'zustand'
-import { supabaseSignin, supabaseSignOut } from '../lib/supabase';
+import { supabaseSignin } from '../utils/supabase/auth';
 
 interface AuthState {
     email?: string;
@@ -28,7 +27,7 @@ const useAuthStore = create<AuthState & AuthActions>((set) => ({
         }
     },
     logout: async () => {
-        await supabaseSignOut();
+        // await supabaseSignOut();
         set({ email: undefined, isAuthenticated: false, token: undefined })
     }
 }))
