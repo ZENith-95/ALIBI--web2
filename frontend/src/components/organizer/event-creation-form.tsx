@@ -11,30 +11,22 @@ import { Plus, Trash, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "../ui/use-toast";
 import { useRouter } from "next/navigation";
-import { CreateEventRequest, icApi } from "../../lib/ic-api";
+import { CreateEventRequest, supabaseApi } from "../../lib/supabaseApi"; // Updated import
 
 export function EventCreationForm() {
   const router = useRouter();
   const [date, setDate] = useState<Date>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ticketTypes, setTicketTypes] = useState([{ name: "", price: "", capacity: "" }]);
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-  const [previewGenerated, setPreviewGenerated] = useState(false);
-  const [primaryColor, setPrimaryColor] = useState("#00FEFE");
-  const [secondaryColor, setSecondaryColor] = useState("#FF00FF");
+  // const [isGeneratingPreview, setIsGeneratingPreview] = useState(false); // Preview generation might be out of scope for now
+  // const [previewGenerated, setPreviewGenerated] = useState(false);
+  // const [primaryColor, setPrimaryColor] = useState("#00FEFE"); // Styling might be handled differently
+  // const [secondaryColor, setSecondaryColor] = useState("#FF00FF");
   const [artStyle, setArtStyle] = useState("cyberpunk");
   const [eventName, setEventName] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventTime, setEventTime] = useState("");
-
-  useEffect(() => {
-    // Debug effect to log when the date changes
-    if (date) {
-      console.log("Date state updated:", date);
-      console.log("Formatted date:", format(date, "yyyy-MM-dd"));
-    }
-  }, [date]);
 
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, { name: "", price: "", capacity: "" }]);
@@ -52,18 +44,8 @@ export function EventCreationForm() {
     setTicketTypes(newTicketTypes);
   };
 
-  const generatePreview = () => {
-    setIsGeneratingPreview(true);
-    // Simulate API call to generate preview
-    setTimeout(() => {
-      setIsGeneratingPreview(false);
-      setPreviewGenerated(true);
-      toast({
-        title: "Preview Generated",
-        description: "AI has generated a preview of your event ticket.",
-      });
-    }, 2000);
-  };
+  // Preview generation might be removed or re-implemented later with a different service
+  // const generatePreview = () => { ... };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,46 +72,49 @@ export function EventCreationForm() {
         return;
       }
 
-      // Format date as YYYY-MM-DD
       const formattedDate = format(date, "yyyy-MM-dd");
-      console.log("Formatted date:", formattedDate);
 
-      // Create the request object
       const request: CreateEventRequest = {
         name: eventName,
         description: eventDescription,
         date: formattedDate,
-        time: eventTime || "12:00",
+        time: eventTime || "12:00", // Default time if not set
         location: eventLocation,
-        imageUrl: null, // No image for now
-        artStyle: artStyle,
+        image_url: null, // Placeholder for image URL
+        art_style: artStyle,
         ticketTypes: ticketTypes.map(tt => ({
           name: tt.name,
-          price: BigInt(parseFloat(tt.price || "0") * 100000000), // Convert to e8s (ICP smallest unit)
-          capacity: BigInt(parseInt(tt.capacity || "0")),
-          description: null,
+          price: parseFloat(tt.price || "0"), // Price as number
+          capacity: parseInt(tt.capacity || "0", 10), // Capacity as number
+          description: null, // Or provide a field for this
         })),
       };
 
-      console.log("Creating event with data:", request);
+      console.log("Creating event with data (Supabase):", request);
 
-      // Call the API to create the event
-      const result = await icApi.createEvent(request);
+      const result = await supabaseApi.createEvent(request); // Use supabaseApi
 
-      if ("ok" in result) {
+      if ('data' in result) { // Check if 'data' property exists
         toast({
           title: "Event Created",
-          description: "Your event has been created successfully with ID: " + result.ok.toString(),
+          description: "Your event has been created successfully with ID: " + result.data,
         });
         router.push("/organizer");
-      } else {
+      } else if ('error' in result) { // Check if 'error' property exists
         let errorMessage = "Unknown error";
-        if ("NotAuthorized" in result.err) {
-          errorMessage = "You are not authorized to create events.";
-        } else if ("InvalidInput" in result.err) {
-          errorMessage = "Invalid input data. Please check your form.";
-        } else if ("SystemError" in result.err) {
-          errorMessage = "System error. Please try again later.";
+        // Adjust error mapping based on SupabaseApi Error type
+        switch (result.error.type) {
+          case 'NotAuthorized':
+            errorMessage = "You are not authorized to create events.";
+            break;
+          case 'InvalidInput':
+            errorMessage = "Invalid input data. Please check your form.";
+            break;
+          case 'SystemError':
+            errorMessage = `System error: ${result.error.details || 'Please try again later.'}`;
+            break;
+          default:
+            errorMessage = `An unexpected error occurred: ${result.error.details || ''}`;
         }
         
         toast({
@@ -178,7 +163,6 @@ export function EventCreationForm() {
                   onChange={(e) => {
                     const selectedDate = e.target.valueAsDate;
                     if (selectedDate) {
-                      console.log("Date selected:", selectedDate);
                       setDate(selectedDate);
                     }
                   }}
@@ -260,11 +244,11 @@ export function EventCreationForm() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor={`ticket-price-${index}`}>Price (ICP)</Label>
+                  <Label htmlFor={`ticket-price-${index}`}>Price</Label> 
                   <Input
                     id={`ticket-price-${index}`}
                     type="number"
-                    step="0.001"
+                    step="0.01" // For currency
                     placeholder="0.00"
                     value={ticket.price}
                     onChange={(e) => updateTicketType(index, "price", e.target.value)}
@@ -286,7 +270,7 @@ export function EventCreationForm() {
                   {ticketTypes.length > 1 && (
                     <button
                       type="button"
-                      className="variant-ghost size-sm"
+                      className="variant-ghost size-sm" // This might need to be a Button component with variant="ghost"
                       onClick={() => removeTicketType(index)}
                     >
                       <Trash className="h-4 w-4" />
@@ -299,7 +283,7 @@ export function EventCreationForm() {
             <button 
               type="button" 
               onClick={addTicketType} 
-              className="w-full border border-gray-300 rounded-md p-2 text-center"
+              className="w-full border border-gray-300 rounded-md p-2 text-center flex items-center justify-center hover:bg-accent" // Added flex for icon alignment
             >
               <Plus className="mr-2 h-4 w-4 inline" />
               Add Ticket Type
@@ -326,4 +310,3 @@ export function EventCreationForm() {
     </form>
   );
 }
-

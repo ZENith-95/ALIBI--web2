@@ -1,182 +1,223 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs"
-import { Lightbulb, Check, X, RefreshCw, QrCode, Ticket, Loader2 } from "lucide-react"
+import { Lightbulb, Check, X, RefreshCw, QrCode, Ticket, Loader2, AlertCircle } from "lucide-react"
 import { toast } from "./ui/use-toast"
 import { Badge } from "./ui/badge"
+import jsQR from "jsqr";
+import { supabaseApi } from "../lib/supabaseApi"; // Import Supabase API
+
+// Define the structure for scan results, including potential ticket info
+interface ScanResultData {
+  valid: boolean;
+  message: string;
+  ticketId?: string; 
+  details?: string; // e.g., Event name if needed later
+}
 
 export function QRScanner() {
   const [scanning, setScanning] = useState(false)
   const [torchOn, setTorchOn] = useState(false)
-  const [scanResult, setScanResult] = useState<null | { valid: boolean; ticket?: any }>(null)
+  const [scanResult, setScanResult] = useState<ScanResultData | null>(null)
   const [scanHistory, setScanHistory] = useState<Array<{ id: string; time: string; valid: boolean }>>([])
   const [isStartingScanner, setIsStartingScanner] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false); // State for verification loading
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null); // Ref for canvas element
   const streamRef = useRef<MediaStream | null>(null)
-  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const animationFrameRef = useRef<number | null>(null); // Ref for animation frame
+
+  // Function to draw video frame onto canvas and scan for QR code
+  const scanFrame = useCallback(() => {
+    if (!scanning || !videoRef.current || !canvasRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+      if (scanning) animationFrameRef.current = requestAnimationFrame(scanFrame); // Keep scanning if active
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    if (!context) {
+       console.error("Could not get 2D context from canvas");
+       animationFrameRef.current = requestAnimationFrame(scanFrame);
+       return;
+    }
+
+    // Set canvas dimensions to match video
+    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth;
+
+    // Draw video frame to canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Get image data from canvas
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Attempt to decode QR code
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "dontInvert",
+    });
+
+    if (code) {
+      console.log("QR Code detected:", code.data);
+      setScanning(false); // Stop scanning animation loop
+      setIsVerifying(true); // Show verification spinner
+      
+      // Assume code.data is the ticketId (UUID string)
+      const ticketId = code.data;
+
+      // Call Supabase to verify the ticket
+      supabaseApi.verifyTicket(ticketId)
+        .then(result => {
+          let scanData: ScanResultData;
+          if ('data' in result && result.data === true) {
+            // Ticket verified successfully
+            scanData = { valid: true, message: "Valid Ticket", ticketId: ticketId };
+            toast({ title: "Valid Ticket", description: `Ticket ${ticketId} verified.` });
+            setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: true }, ...prev].slice(0, 10));
+          } else if ('data' in result && result.data === false) {
+             // Ticket was valid but already used
+             scanData = { valid: false, message: "Ticket Already Used", ticketId: ticketId };
+             toast({ title: "Already Used", description: `Ticket ${ticketId} has already been used.`, variant: "destructive" });
+             setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
+          } else {
+            // Error occurred during verification (NotFound, SystemError, etc.)
+            const errorType = ('error' in result) ? result.error.type : 'Unknown';
+            scanData = { valid: false, message: `Verification Failed (${errorType})`, ticketId: ticketId };
+            toast({ title: "Verification Failed", description: `Could not verify ticket ${ticketId}. Error: ${errorType}`, variant: "destructive" });
+            setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
+          }
+          setScanResult(scanData);
+          stopScanner(false); // Stop camera but keep result displayed
+        })
+        .catch(err => {
+           console.error("Error calling verifyTicket:", err);
+           setScanResult({ valid: false, message: "Verification Error", ticketId: ticketId });
+           toast({ title: "Verification Error", description: "An unexpected error occurred during verification.", variant: "destructive" });
+           setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
+           stopScanner(false);
+        })
+        .finally(() => {
+           setIsVerifying(false);
+        });
+
+    } else {
+      // No QR code found in this frame, continue scanning
+      animationFrameRef.current = requestAnimationFrame(scanFrame);
+    }
+  }, [scanning]); // Dependency array includes scanning state
 
   const startScanner = async () => {
+    if (scanning || isStartingScanner) return;
+    
     try {
-      setIsStartingScanner(true)
+      setIsStartingScanner(true);
+      setScanResult(null); // Clear previous result
       const constraints = {
         video: {
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          facingMode: "environment", // Use rear camera
+          width: { ideal: 640 }, // Smaller resolution might be faster
+          height: { ideal: 480 },
         },
-      }
+      };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
+        videoRef.current.srcObject = stream;
+        // Ensure video plays before starting scan loop
+        videoRef.current.onloadedmetadata = () => {
+           if (videoRef.current) {
+              videoRef.current.play().then(() => {
+                 setScanning(true);
+                 // Create canvas element dynamically if it doesn't exist
+                 if (!canvasRef.current) {
+                    canvasRef.current = document.createElement('canvas');
+                 }
+                 // Start the scanning loop
+                 animationFrameRef.current = requestAnimationFrame(scanFrame);
+              }).catch(err => {
+                 console.error("Error playing video:", err);
+                 toast({ title: "Camera Error", description: "Could not play video stream.", variant: "destructive" });
+                 stopScanner();
+              });
+           }
+        };
+      } else {
+         throw new Error("Video element not available");
       }
-
-      setScanning(true)
-
-      // Simulate scanning for demo purposes
-      scanTimeoutRef.current = setTimeout(() => {
-        // Randomly determine if the scan is valid (for demo)
-        const isValid = Math.random() > 0.3
-
-        if (isValid) {
-          const mockTicket = {
-            id: "T-" + Math.floor(Math.random() * 10000),
-            eventName: "Neon Nights 2024",
-            eventDate: "June 15, 2024",
-            status: "active",
-          }
-
-          setScanResult({ valid: true, ticket: mockTicket })
-
-          // Add to scan history
-          setScanHistory((prev) =>
-            [
-              {
-                id: mockTicket.id,
-                time: new Date().toLocaleTimeString(),
-                valid: true,
-              },
-              ...prev,
-            ].slice(0, 10),
-          )
-
-          toast({
-            title: "Valid Ticket",
-            description: `Ticket ${mockTicket.id} for ${mockTicket.eventName} has been verified.`,
-          })
-        } else {
-          setScanResult({ valid: false })
-
-          // Add to scan history
-          setScanHistory((prev) =>
-            [
-              {
-                id: "Invalid QR",
-                time: new Date().toLocaleTimeString(),
-                valid: false,
-              },
-              ...prev,
-            ].slice(0, 10),
-          )
-
-          toast({
-            title: "Invalid Ticket",
-            description: "This QR code is not a valid ticket or has already been used.",
-            variant: "destructive",
-          })
-        }
-
-        stopScanner()
-      }, 3000)
     } catch (error) {
-      console.error("Error accessing camera:", error)
-      toast({
-        title: "Camera Error",
-        description: "Unable to access camera. Please check permissions.",
-        variant: "destructive",
-      })
+      console.error("Error accessing camera:", error);
+      let message = "Unable to access camera. Please check permissions.";
+      if (error instanceof Error && error.name === "NotAllowedError") {
+         message = "Camera access denied. Please grant permission in your browser settings.";
+      } else if (error instanceof Error && error.name === "NotFoundError") {
+         message = "No suitable camera found. Ensure a rear camera is available.";
+      }
+      toast({ title: "Camera Error", description: message, variant: "destructive" });
+      stopScanner(); // Ensure cleanup if start fails
     } finally {
-      setIsStartingScanner(false)
+      setIsStartingScanner(false);
     }
-  }
+  };
 
-  const stopScanner = () => {
-    if (scanTimeoutRef.current) {
-      clearTimeout(scanTimeoutRef.current)
-      scanTimeoutRef.current = null
+  // Modified stopScanner to optionally keep the result displayed
+  const stopScanner = (clearResult = true) => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
     if (videoRef.current) {
-      videoRef.current.srcObject = null
+      videoRef.current.srcObject = null;
+      videoRef.current.onloadedmetadata = null; // Clean up listener
     }
 
-    setScanning(false)
-    setTorchOn(false)
-  }
+    setScanning(false);
+    setTorchOn(false);
+    setIsVerifying(false); // Ensure verification spinner stops
+    if (clearResult) {
+       setScanResult(null); // Clear result only if requested
+    }
+  };
 
   const toggleTorch = async () => {
-    if (!streamRef.current) return
-
-    try {
-      const track = streamRef.current.getVideoTracks()[0]
-      if (!track) {
-        toast({
-          title: "Torch Unavailable",
-          description: "No video track available.",
-          variant: "destructive",
-        })
-        return
+    // Torch toggle logic remains largely the same
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (!track) return;
+    const capabilities = track.getCapabilities();
+    if ('torch' in capabilities && capabilities.torch) {
+      try {
+        await track.applyConstraints({ advanced: [{ torch: !torchOn }] as any });
+        setTorchOn(!torchOn);
+      } catch (error) {
+        console.error("Error toggling torch:", error);
+        toast({ title: "Torch Error", description: "Failed to toggle torch.", variant: "destructive" });
       }
-
-      const capabilities = track.getCapabilities()
-
-      if ('torch' in capabilities && capabilities.torch) {
-        await track.applyConstraints({
-          advanced: [{ torch: !torchOn }] as any,
-        })
-        setTorchOn(!torchOn)
-      } else {
-        toast({
-          title: "Torch Unavailable",
-          description: "Your device does not support torch control.",
-        })
-      }
-    } catch (error) {
-      console.error("Error toggling torch:", error)
-      toast({
-        title: "Torch Error",
-        description: "Failed to toggle torch. Please try again.",
-        variant: "destructive",
-      })
+    } else {
+      toast({ title: "Torch Unavailable", description: "Torch control not supported." });
     }
-  }
+  };
 
   const resetScan = () => {
-    setScanResult(null)
-  }
+    stopScanner(true); // Stop scanner and clear result
+  };
 
   // Clean up on unmount
   useEffect(() => {
-    return () => {
-      if (scanTimeoutRef.current) {
-        clearTimeout(scanTimeoutRef.current)
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [])
+    return () => stopScanner(true);
+  }, []);
 
   return (
     <div className="max-w-md mx-auto">
@@ -194,16 +235,28 @@ export function QRScanner() {
             </CardHeader>
             <CardContent>
               <div className="relative aspect-[4/3] rounded-lg overflow-hidden bg-black mb-4">
-                {scanning ? (
-                  <>
-                    <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-64 h-64 border-2 border-primary rounded-lg opacity-70"></div>
-                    </div>
-                  </>
-                ) : scanResult ? (
+                {/* Video Element */}
+                <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover ${!scanning && !scanResult ? 'hidden' : ''}`} playsInline muted />
+                
+                {/* Scanning Indicator */}
+                {scanning && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-64 h-64 border-2 border-primary rounded-lg opacity-70 animate-pulse"></div>
+                  </div>
+                )}
+
+                {/* Verification Loading Indicator */}
+                {isVerifying && (
+                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70">
+                      <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+                      <p className="text-primary">Verifying Ticket...</p>
+                   </div>
+                )}
+
+                {/* Scan Result Display */}
+                {!scanning && !isVerifying && scanResult && (
                   <div
-                    className={`absolute inset-0 flex flex-col items-center justify-center ${
+                    className={`absolute inset-0 flex flex-col items-center justify-center p-4 ${
                       scanResult.valid ? "bg-green-900/20" : "bg-red-900/20"
                     }`}
                   >
@@ -214,21 +267,16 @@ export function QRScanner() {
                         <X className="h-12 w-12 text-red-500" />
                       )}
                     </div>
-                    {scanResult.valid ? (
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold text-green-500 mb-1">Valid Ticket</h3>
-                        <p className="text-muted-foreground mb-1">ID: {scanResult.ticket?.id}</p>
-                        <p className="text-muted-foreground mb-1">Event: {scanResult.ticket?.eventName}</p>
-                        <p className="text-muted-foreground">Date: {scanResult.ticket?.eventDate}</p>
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold text-red-500 mb-2">Invalid Ticket</h3>
-                        <p className="text-muted-foreground">This QR code is not valid or has already been used.</p>
-                      </div>
-                    )}
+                    <div className="text-center">
+                       <h3 className={`text-xl font-bold ${scanResult.valid ? "text-green-500" : "text-red-500"} mb-1`}>{scanResult.message}</h3>
+                       {scanResult.ticketId && <p className="text-muted-foreground mb-1">ID: {scanResult.ticketId}</p>}
+                       {/* Add more details if needed */}
+                    </div>
                   </div>
-                ) : (
+                )}
+
+                {/* Initial State Prompt */}
+                {!scanning && !scanResult && !isVerifying && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-secondary/50">
                     <QrCode className="h-16 w-16 text-muted-foreground mb-4" />
                     <p className="text-center text-muted-foreground">Ready to scan ticket QR codes</p>
@@ -243,14 +291,14 @@ export function QRScanner() {
                     <Lightbulb className={`mr-2 h-4 w-4 ${torchOn ? "text-yellow-400" : ""}`} />
                     {torchOn ? "Torch On" : "Torch Off"}
                   </Button>
-                  <Button variant="destructive" onClick={stopScanner} type="button">
+                  <Button variant="destructive" onClick={() => stopScanner(true)} type="button">
                     Stop Scanning
                   </Button>
                 </>
-              ) : scanResult ? (
-                <Button className="w-full" onClick={resetScan} type="button">
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Scan Another Ticket
+              ) : scanResult || isVerifying ? ( // Show reset button if showing result OR verifying
+                <Button className="w-full" onClick={resetScan} type="button" disabled={isVerifying}>
+                   {isVerifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                   {isVerifying ? "Verifying..." : "Scan Another Ticket"}
                 </Button>
               ) : (
                 <Button className="w-full" onClick={startScanner} type="button" disabled={isStartingScanner}>
@@ -288,7 +336,7 @@ export function QRScanner() {
                           </div>
                         )}
                         <div>
-                          <p className="font-medium">{scan.id}</p>
+                          <p className="font-medium truncate max-w-[150px] sm:max-w-xs" title={scan.id}>{scan.id}</p> {/* Truncate long IDs */}
                           <p className="text-xs text-muted-foreground">{scan.time}</p>
                         </div>
                       </div>
@@ -315,4 +363,3 @@ export function QRScanner() {
     </div>
   )
 }
-
