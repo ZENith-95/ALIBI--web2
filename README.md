@@ -1,118 +1,36 @@
-Alibi - "Not Proof of Absence!"
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A robust, user-centric MVP on ICP that demonstrates AI-generated NFT ticketing, QR-based entry, and post-event utility, prioritizing cost efficiency, scalability, and seamless integration between frontend and Motoko backend.
+## Getting Started
 
-Core Features
-AI-Generated NFT Tickets
+First, run the development server:
 
-Dynamic Art: Uses free-tier Stable Diffusion/DALL-E APIs to create unique SVG-based ticket designs.
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-Traits System: Randomized traits (e.g., "VIP," "Golden Border") stored in NFT metadata.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-On-Chain Storage: Embed SVG artwork and QR codes directly into Motoko canisters to avoid external dependencies.
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-Event Creation & RSVP
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-Organizer Dashboard:
+## Learn More
 
-Input event details (name, date, capacity).
+To learn more about Next.js, take a look at the following resources:
 
-Select AI art style (e.g., "Cyberpunk," "Minimalist").
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-Preview and batch-generate 10 sample tickets.
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-Attendee Flow:
+## Deploy on Vercel
 
-RSVP with Internet Identity → Mint NFT → Receive QR code.
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-QR Check-In System
-
-Staff Interface: Mobile-first QR scanner with real-time validation.
-
-On-Chain Verification: Motoko canister checks ticket status (active, used, invalid).
-
-Post-Event Utility
-
-Unlockables: Post-check-in, NFT metadata updates with secret links (e.g., Discord invites, discount codes).
-
-Collectibles: Transform tickets into "Proof of Attendance" badges with AI-enhanced traits.
-
-Technical Implementation
-Frontend (React, NextJs)
-UI Libraries:
-
-react-qr-reader for scanning.
-
-framer-motion for smooth transitions.
-
-react-query for caching canister data.
-
-Wallet Integration: Plug & Internet Identity for auth and NFT storage.
-
-Responsive Design: Mobile-first layout with Tailwind CSS.
-
-Backend (Motoko)
- 
-AI Integration
-Free Tools:
-
-Replicate.com (free tier) for Stable Diffusion XL.
-
-QRCode.js for generating SVG QR codes.
-
-Fallbacks:
-
-Pre-generate 20 ticket designs for demo purposes.
-
-Use CSS gradients/patterns if API fails.
-
-Key Challenges & Mitigation
-Challenge	Solution
-AI API rate limits	Cache responses; use mock data for demos.
-QR scan latency	Optimize Motoko canister queries.
-Wallet connectivity issues	Provide clear error toasts and retry buttons.
-SVG rendering lag	Preload assets; use <img> tags for SVGs.
-
-
-Demo Script
-Organizer:
-
-Creates "Neon Nights 2024" event → Generates 10 AI tickets.
-
-Attendee:
-
-RSVPs → Mints NFT → Views QR code in wallet.
-
-Staff:
-
-Scans QR → Updates ticket status → Triggers unlockables.
-
-Post-Event:
-
-Attendee accesses secret Discord link via NFT.
-
-Scalability Roadmap
-Phase 1: Batch AI art generation for 1,000+ tickets.
-
-Phase 2: Cross-chain compatibility (e.g., mint on ICP, resell on Ethereum).
-
-Phase 3: DAO governance for event organizers.
-
-Differentiators
-Zero Gas Fees: ICP’s reverse gas model for seamless UX.
-
-Provable Ownership: Dynamic NFTs with immutable attendance records.
-
-Cost Efficiency: Fully on-chain storage (SVGs + metadata).
-
-Final Deliverables:
-
-Functional MVP with AI tickets, QR check-in, and unlockables.
-
-GitHub repo with detailed setup guide.
-
-Pitch deck highlighting ICP’s advantages over competitors.
-
-Alibi? Your Proof of Presence
-
-
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
