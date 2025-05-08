@@ -3,17 +3,22 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { LogIn, LogOut, Loader2 } from "lucide-react";
-import { icApi } from "../lib/ic-api";
+import { useRouter } from "next/navigation";
+import useAuthStore from "../hooks/useAuth";
 
 export function AuthButton() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const authState = useAuthStore();
+  const isAuthenticated = authState.isAuthenticated;
   const [isLoading, setIsLoading] = useState(false);
   const [principalId, setPrincipalId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     checkAuth();
   }, []);
 
+ 
   const checkAuth = async () => {
     try {
       // const authClient = await AuthClient.create();
@@ -34,23 +39,8 @@ export function AuthButton() {
   };
 
   const login = async () => {
-    setIsLoading(true);
     try {
-      /* const authClient = await AuthClient.create();
-       
-       // Start the login flow
-       await new Promise<void>((resolve) => {
-         authClient.login({
-           identityProvider: process.env.NEXT_PUBLIC_INTERNET_IDENTITY_URL,
-           onSuccess: () => resolve(),
-           onError: (error) => {
-             console.error("Login failed:", error);
-             setIsLoading(false);
-           },
-         });
-       });
- 
-       await checkAuth();*/
+      router.push("/signin");
     } catch (error) {
       console.error("Error during login:", error);
     } finally {
@@ -100,7 +90,7 @@ export function AuthButton() {
           ) : (
             <LogIn className="mr-2 h-4 w-4" />
           )}
-          Login with Internet Identity
+          Login
         </Button>
       )}
     </div>

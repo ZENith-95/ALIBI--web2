@@ -1,4 +1,6 @@
+import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient';
 import { create } from 'zustand'
+import { supabaseSignin, supabaseSignOut } from '../lib/supabase';
 
 interface AuthState {
     email?: string;
@@ -16,17 +18,18 @@ const initialState: AuthState = {
 }
 const useAuthStore = create<AuthState & AuthActions>((set) => ({
     ...initialState,
-    login: (email: string, password: string) => {
-        // Simulate an API call
-        setTimeout(() => {
-            set({ email, token: 'fake-token', isAuthenticated: true });
-        }, 1000);
+    login: async (email: string, password: string) => {
+        try {
+            const data = await supabaseSignin(email, password);
+            set({ email: data.user.email, isAuthenticated: true, token: data.session.access_token })
+        } catch (e) {
+            console.log("Error logging in:", e);
+            console.log(e);
+        }
     },
-    logout: () => {
-        // Simulate an API call
-        setTimeout(() => {
-            set({ email: undefined, token: undefined, isAuthenticated: false });
-        }, 1000);
+    logout: async () => {
+        await supabaseSignOut();
+        set({ email: undefined, isAuthenticated: false, token: undefined })
     }
 }))
 
