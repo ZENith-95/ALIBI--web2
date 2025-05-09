@@ -1,11 +1,11 @@
+import { persist } from "zustand/middleware";
+import { Event as EventType } from "../types/data-types";
 import { create } from 'zustand';
 import { CreateEventRequest } from '../types/data-types';
-import { createEvent, getAllEvents, getEventById } from '../utils/pocketbase/event';
-
-
+import { createEvent, getAllEvents, getEventById, getEventByUser } from '../utils/pocketbase/event';
 
 interface EventState {
-    events: Event[];
+    events: EventType[];
     loading: boolean;
     error: string | null;
 }
@@ -15,22 +15,33 @@ interface EventActions {
     fetchEvents: () => Promise<void>;
     fetchEventById: (id: string) => Promise<void>;
     createEvent: (eventData: CreateEventRequest) => Promise<void>;
+    eventsByCreator: (eventId: string) => Promise<void>;
 }
 const initialState: EventState = {
     events: [],
     loading: false,
     error: null,
 };
-const useEventStore = create<EventState & EventActions>((set) => ({
+const useEventStore = create<EventState & EventActions>()(persist((set) => ({
     ...initialState,
     fetchEvents: async () => {
         set({ loading: true });
         try {
-            const events = await getAllEvents() as unknown as Event[];
+            const events = await getAllEvents() as EventType[];
             set({ events, loading: false, error: null });
         } catch (error) {
             console.error("Error fetching events:", error);
             set({ loading: false, error: "Failed to fetch events." });
+        }
+    },
+    eventsByCreator: async (userId) => {
+        set({ loading: true })
+        try {
+            const events = await getEventByUser(userId)
+            set({ events: events })
+        } catch (e) {
+            const error = e as Error
+            set({ error: error.toString(), loading: false })
         }
     },
     fetchEventById: async (id: string) => {
@@ -59,5 +70,7 @@ const useEventStore = create<EventState & EventActions>((set) => ({
             set({ loading: false, error: "Failed to create event." });
         }
     }
+}), {
+    name: "event-storage", // unique name
 }));
 export default useEventStore;

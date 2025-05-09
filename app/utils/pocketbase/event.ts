@@ -1,5 +1,5 @@
 import { pb } from "./base";
-
+import { Event as EventType } from "../../types/data-types";
 export async function getAllEvents() {
     const events = await pb.collection('events').getFullList(200, {
         sort: '-created',
@@ -11,25 +11,32 @@ export async function getAllEvents() {
 }
 
 
+export async function getEventByUser(userId: string) {
+    const events = await pb.collection("events").getList(1, 500, {
+        filter: `events.user_id = ${userId}`
+    })
+    return events.items
+
+}
 export async function getEventById(id: string) {
     const event = await pb.collection('events').getOne(id, {
         expand: "event_type",
     });
-    console.log("Event fetched:", event);
+    console.log("EventType fetched:", event);
     return event;
 }
 export async function createEvent(eventData: any) {
     const event = await pb.collection('events').create(eventData);
-    console.log("Event created:", event);
-    return event as unknown as Event;
+    console.log("EventType created:", event);
+    return event as unknown as EventType;
 }
 export async function updateEvent(id: string, eventData: any) {
     const event = await pb.collection('events').update(id, eventData);
-    console.log("Event updated:", event);
+    console.log("EventType updated:", event);
     return event;
 }
 export async function deleteEvent(id: string) {
     const event = await pb.collection('events').delete(id);
-    console.log("Event deleted:", event);
+    console.log("EventType deleted:", event);
     return event;
 }

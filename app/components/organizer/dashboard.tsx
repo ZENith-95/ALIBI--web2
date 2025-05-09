@@ -12,6 +12,7 @@ import { EventList } from "./event-list" // Adjusted path
 import { EventAnalytics } from "./event-analytics" // Adjusted path
 import { User } from "@/app/types/data-types"
 import useAuthStore from "@/app/hooks/useAuth"
+import useEventStore from "@/app/hooks/useEvents"
 
 // Map Supabase event to frontend event display format
 const mapEventToDisplay = (event: OrganizerEvent) => {
@@ -31,22 +32,18 @@ const mapEventToDisplay = (event: OrganizerEvent) => {
 
 export function OrganizerDashboard() {
   const [isLoading, setIsLoading] = useState(true)
-  const [events, setEvents] = useState<any[]>([]);
   const authState = useAuthStore();
-
+  const eventsState = useEventStore();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkUserAndFetchEvents = async () => {
       setIsLoading(true);
-      const user = authState.user?.email;
+      const user = authState.user
 
       if (user) {
         try {
-          const backendEvents = await supabaseApi.getOrganizerEvents(user.id);
-          const formattedEvents = backendEvents.map(mapEventToDisplay);
-          setEvents(formattedEvents);
-          setError(null);
+          const backendEvents = await eventsState.fetchEvents(user.id);
         } catch (err) {
           console.error("Error fetching events:", err);
           setEvents([]);
