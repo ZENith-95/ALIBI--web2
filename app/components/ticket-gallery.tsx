@@ -7,22 +7,20 @@ import { Skeleton } from "./ui/skeleton"
 import { Button } from "./ui/button"
 import { Ticket as TicketIcon } from "lucide-react" // Renamed to avoid conflict with Ticket type
 import Link from "next/link"
-import { supabaseApi, Ticket } from "../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and types
-import { getCurrentUser, onAuthStateChange } from "../../auth";
-import { User, Session } from "@supabase/supabase-js";
+import { Ticket } from "../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and types
 
 // Map Supabase ticket to frontend ticket display format
 const mapTicketToDisplay = (ticket: Ticket) => {
   // Metadata structure might differ with Supabase, adjust as needed
   const eventName = ticket.metadata?.name || "Event Ticket";
   const eventDate = ticket.metadata?.attributes?.find(
-    (attr: {trait_type: string, value: string}) => attr.trait_type === "Date"
+    (attr: { trait_type: string, value: string }) => attr.trait_type === "Date"
   )?.value || "";
   const eventTime = ticket.metadata?.attributes?.find(
-    (attr: {trait_type: string, value: string}) => attr.trait_type === "Time"
+    (attr: { trait_type: string, value: string }) => attr.trait_type === "Time"
   )?.value || "";
   const eventLocation = ticket.metadata?.attributes?.find(
-    (attr: {trait_type: string, value: string}) => attr.trait_type === "Location"
+    (attr: { trait_type: string, value: string }) => attr.trait_type === "Location"
   )?.value || "";
   const qrHash = ticket.metadata?.qrHash || ""; // Assuming qrHash might be part of metadata
 
@@ -150,7 +148,7 @@ export function TicketGallery() {
       </div>
     );
   }
-  
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
