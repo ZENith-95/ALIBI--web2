@@ -1,3 +1,4 @@
 
+import { TypedPocketBase } from "@/app/types/data-types";
 import PocketBase from "pocketbase";
-export const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKET_BASE_URL!)
+export const pb = new PocketBase(process.env.NEXT_PUBLIC_POCKET_BASE_URL!) as TypedPocketBase;

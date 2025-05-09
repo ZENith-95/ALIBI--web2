@@ -1,3 +1,14 @@
+import PocketBase, { RecordService } from 'pocketbase';
+export interface TypedPocketBase extends PocketBase {
+    collection(idOrName: string): RecordService // default fallback for any other collection
+    collection(idOrName: 'events'): RecordService<Event>
+    collection(idOrName: 'ticket_types'): RecordService<TicketType>
+    collection(idOrName: 'users'): RecordService<User>
+}
+type User = {
+    id: string; // PocketBase uses UUID for IDs
+    email: string;
+}
 // Types (adapted for Supabase)
 export interface Event {
     id: string; // Supabase uses UUID for IDs
@@ -14,9 +25,9 @@ export interface Event {
     ticketsSold: number; // Calculate from ticketTypes
     status: string; // e.g., 'active', 'cancelled'
     created_at: string; // ISO timestamp string
-  }
-  
-  export interface TicketType {
+}
+
+export interface TicketType {
     id: string; // Supabase uses UUID for IDs
     event_id: string; // Foreign key
     name: string;
@@ -24,9 +35,9 @@ export interface Event {
     capacity: number;
     sold: number;
     description: string | null;
-  }
-  
-  export interface Ticket {
+}
+
+export interface Ticket {
     id: string; // Supabase uses UUID for IDs
     event_id: string; // Foreign key
     ticket_type_id: string; // Foreign key
@@ -34,16 +45,16 @@ export interface Event {
     is_used: boolean;
     metadata: any; // JSONB type in Supabase
     minted_at: string; // ISO timestamp string
-  }
-  
-  export interface Profile {
+}
+
+export interface Profile {
     id: string; // Foreign key referencing auth.users
     username: string;
     bio: string | null;
     created_at: string; // ISO timestamp string
-  }
-  
-  export interface CreateEventRequest {
+}
+
+export interface CreateEventRequest {
     name: string;
     description: string;
     date: string;
@@ -52,21 +63,21 @@ export interface Event {
     image_url: string | null;
     art_style: string;
     ticketTypes: {
-      name: string;
-      price: number;
-      capacity: number;
-      description: string | null;
+        name: string;
+        price: number;
+        capacity: number;
+        description: string | null;
     }[];
-  }
-  
-  export interface MintTicketRequest {
+}
+
+export interface MintTicketRequest {
     event_id: string;
     ticket_type_id: string;
-  }
-  
-  export type Result<T, E> = { data: T } | { error: E };
-  
-  export type Error =
+}
+
+export type Result<T, E> = { data: T } | { error: E };
+
+export type Error =
     | { type: 'NotFound' }
     | { type: 'AlreadyExists' }
     | { type: 'NotAuthorized' }
@@ -74,5 +85,4 @@ export interface Event {
     | { type: 'InvalidInput' }
     | { type: 'CannotModify' }
     | { type: 'SystemError', details?: string };
-  
-  
+
