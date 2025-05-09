@@ -5,7 +5,7 @@ export interface TypedPocketBase extends PocketBase {
     collection(idOrName: 'ticket_types'): RecordService<TicketType>
     collection(idOrName: 'users'): RecordService<User>
 }
-type User = {
+export type User = {
     id: string; // PocketBase uses UUID for IDs
     email: string;
 }

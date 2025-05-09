@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { loginUser, logoutUser } from '../utils/pocketbase/auth';
-
+import { User } from '../types/data-types';
+import { persist } from "zustand/middleware";
 interface AuthState {
-    email?: string;
+    user?: User
     token?: string;
     isAuthenticated: boolean;
     processing: boolean;
@@ -16,14 +17,14 @@ const initialState: AuthState = {
     isAuthenticated: false,
     processing: false,
 }
-const useAuthStore = create<AuthState & AuthActions>((set) => ({
+const useAuthStore = create<AuthState & AuthActions>()(persist((set) => ({
     ...initialState,
     login: async (email: string, password: string) => {
         try {
             set({ processing: true });
             const data = await loginUser(email, password);
 
-            set({ email: data.record.email, isAuthenticated: true, token: data.token, processing: false });
+            set({ user: data.record, isAuthenticated: true, token: data.token, processing: false });
         } catch (e) {
             console.log("Error logging in:", e);
             console.error(e);
@@ -33,9 +34,11 @@ const useAuthStore = create<AuthState & AuthActions>((set) => ({
     },
     logout: async () => {
         await logoutUser();
-        set({ email: undefined, isAuthenticated: false, token: undefined })
+        set({ user: undefined, isAuthenticated: false, token: undefined })
     }
-}))
+}), {
+    name: "auth-storage", // unique name
+}));
 
 
 export default useAuthStore;

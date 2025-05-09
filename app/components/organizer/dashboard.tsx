@@ -10,9 +10,8 @@ import { Skeleton } from "../ui/skeleton"
 import Link from "next/link"
 import { EventList } from "./event-list" // Adjusted path
 import { EventAnalytics } from "./event-analytics" // Adjusted path
-import { supabaseApi, Event as OrganizerEvent } from "../../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and Event type
-import { getCurrentUser, onAuthStateChange } from "../../../auth";
-import { User, Session } from "@supabase/supabase-js";
+import { User } from "@/app/types/data-types"
+import useAuthStore from "@/app/hooks/useAuth"
 
 // Map Supabase event to frontend event display format
 const mapEventToDisplay = (event: OrganizerEvent) => {
@@ -32,15 +31,15 @@ const mapEventToDisplay = (event: OrganizerEvent) => {
 
 export function OrganizerDashboard() {
   const [isLoading, setIsLoading] = useState(true)
-  const [events, setEvents] = useState<any[]>([])
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const authState = useAuthStore();
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkUserAndFetchEvents = async () => {
       setIsLoading(true);
-      const user = await getCurrentUser();
-      setCurrentUser(user);
+      const user = authState.user?.email;
 
       if (user) {
         try {
@@ -108,7 +107,7 @@ export function OrganizerDashboard() {
       </div>
     );
   }
-  
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -133,9 +132,9 @@ export function OrganizerDashboard() {
           <Skeleton className="h-[500px] rounded-lg" />
         </>
       ) : error ? (
-         <div className="flex flex-col items-center justify-center py-16 text-center">
-            <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
-         </div>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
