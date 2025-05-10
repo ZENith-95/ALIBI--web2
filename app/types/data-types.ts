@@ -6,10 +6,12 @@ export interface TypedPocketBase extends PocketBase {
     collection(idOrName: 'users'): RecordService<User>
 }
 export type User = {
-    id: string; // PocketBase uses UUID for IDs
+    id: string; 
     email: string;
+    name?: string; // Add optional name field
+    avatar?: string; // Add optional avatar field (filename from PocketBase)
 }
-// Types (adapted for Supabase)
+// Types 
 export interface Event {
     id: string; // Supabase uses UUID for IDs
     name: string;
@@ -85,4 +87,3 @@ export type Error =
     | { type: 'InvalidInput' }
     | { type: 'CannotModify' }
     | { type: 'SystemError', details?: string };
-

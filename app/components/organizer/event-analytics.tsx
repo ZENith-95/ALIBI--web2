@@ -1,7 +1,7 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
-import { Progress } from "../ui/progress"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card" // This path is correct from app/components/organizer
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs" // This path is correct
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select" // This path is correct
+import { Progress } from "../ui/progress" // This path is correct
 
 interface EventAnalyticsProps {
   events: any[]
@@ -239,4 +239,3 @@ export function EventAnalytics({ events }: EventAnalyticsProps) {
     </div>
   )
 }
-

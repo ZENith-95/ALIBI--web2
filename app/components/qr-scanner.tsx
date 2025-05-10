@@ -8,7 +8,7 @@ import { Lightbulb, Check, X, RefreshCw, QrCode, Ticket, Loader2, AlertCircle } 
 import { toast } from "./ui/use-toast"
 import { Badge } from "./ui/badge"
 import jsQR from "jsqr";
-import { supabaseApi } from "../lib/supabaseApi"; // Import Supabase API
+import { verifyTicket } from "@/app/utils/pocketbase/ticket"; // Import PocketBase function with alias
 
 // Define the structure for scan results, including potential ticket info
 interface ScanResultData {
@@ -70,34 +70,27 @@ export function QRScanner() {
       // Assume code.data is the ticketId (UUID string)
       const ticketId = code.data;
 
-      // Call Supabase to verify the ticket
-      supabaseApi.verifyTicket(ticketId)
-        .then(result => {
+      // Call PocketBase to verify the ticket
+      verifyTicket(ticketId)
+        .then(isValid => {
+          // verifyTicket returns true if valid/verified, false if already used
           let scanData: ScanResultData;
-          if ('data' in result && result.data === true) {
-            // Ticket verified successfully
+          if (isValid) {
             scanData = { valid: true, message: "Valid Ticket", ticketId: ticketId };
             toast({ title: "Valid Ticket", description: `Ticket ${ticketId} verified.` });
             setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: true }, ...prev].slice(0, 10));
-          } else if ('data' in result && result.data === false) {
-             // Ticket was valid but already used
-             scanData = { valid: false, message: "Ticket Already Used", ticketId: ticketId };
-             toast({ title: "Already Used", description: `Ticket ${ticketId} has already been used.`, variant: "destructive" });
-             setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
           } else {
-            // Error occurred during verification (NotFound, SystemError, etc.)
-            const errorType = ('error' in result) ? result.error.type : 'Unknown';
-            scanData = { valid: false, message: `Verification Failed (${errorType})`, ticketId: ticketId };
-            toast({ title: "Verification Failed", description: `Could not verify ticket ${ticketId}. Error: ${errorType}`, variant: "destructive" });
+            scanData = { valid: false, message: "Ticket Already Used", ticketId: ticketId };
+            toast({ title: "Already Used", description: `Ticket ${ticketId} has already been used.`, variant: "destructive" });
             setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
           }
-          setScanResult(scanData);
-          stopScanner(false); // Stop camera but keep result displayed
+           setScanResult(scanData);
+           stopScanner(false); // Stop camera but keep result displayed
         })
-        .catch(err => {
+        .catch(err => { // Catch errors (like Not Found)
            console.error("Error calling verifyTicket:", err);
-           setScanResult({ valid: false, message: "Verification Error", ticketId: ticketId });
-           toast({ title: "Verification Error", description: "An unexpected error occurred during verification.", variant: "destructive" });
+           setScanResult({ valid: false, message: err.message || "Verification Error", ticketId: ticketId });
+           toast({ title: "Verification Error", description: err.message || "An unexpected error occurred.", variant: "destructive" });
            setScanHistory(prev => [{ id: ticketId, time: new Date().toLocaleTimeString(), valid: false }, ...prev].slice(0, 10));
            stopScanner(false);
         })

@@ -7,26 +7,23 @@ import { Skeleton } from "./ui/skeleton"
 import { Button } from "./ui/button"
 import { Ticket as TicketIcon } from "lucide-react" // Renamed to avoid conflict with Ticket type
 import Link from "next/link"
-import { Ticket } from "../lib/supabaseApi"; // Assuming supabaseApi.ts now exports supabaseApi and types
+import { getUserTickets } from "@/app/utils/pocketbase/ticket"; // PocketBase import with alias
+import type { Ticket } from "@/app/types/data-types"; // Type import with alias
+import useAuthStore from "@/app/hooks/useAuth"; // Use Zustand store with alias
 
-// Map Supabase ticket to frontend ticket display format
-const mapTicketToDisplay = (ticket: Ticket) => {
-  // Metadata structure might differ with Supabase, adjust as needed
-  const eventName = ticket.metadata?.name || "Event Ticket";
-  const eventDate = ticket.metadata?.attributes?.find(
-    (attr: { trait_type: string, value: string }) => attr.trait_type === "Date"
-  )?.value || "";
-  const eventTime = ticket.metadata?.attributes?.find(
-    (attr: { trait_type: string, value: string }) => attr.trait_type === "Time"
-  )?.value || "";
-  const eventLocation = ticket.metadata?.attributes?.find(
-    (attr: { trait_type: string, value: string }) => attr.trait_type === "Location"
-  )?.value || "";
-  const qrHash = ticket.metadata?.qrHash || ""; // Assuming qrHash might be part of metadata
+// Map PocketBase ticket to frontend ticket display format
+const mapTicketToDisplay = (ticket: Ticket) => { 
+  // PocketBase metadata might be structured differently or need expansion
+  // Assuming basic metadata stored directly for now
+  const eventName = ticket.metadata?.event_name || ticket.metadata?.ticket_name || "Event Ticket"; 
+  const eventDate = ticket.metadata?.event_date || ""; // Example field names
+  const eventTime = ticket.metadata?.event_time || ""; // Example field names
+  const eventLocation = ticket.metadata?.event_location || ""; // Example field names
+  const qrHash = ticket.metadata?.qrHash || ticket.id; // Use ticket ID for QR if specific hash isn't stored
 
   return {
     id: ticket.id.toString(),
-    eventId: ticket.event_id.toString(),
+    eventId: ticket.event_id.toString(), // Assuming event_id is present
     eventName,
     eventDate,
     eventTime,
@@ -34,7 +31,7 @@ const mapTicketToDisplay = (ticket: Ticket) => {
     imageUrl: ticket.metadata?.imageUrl || "/placeholder.svg?height=300&width=200&text=" + encodeURIComponent(eventName),
     status: ticket.is_used ? "used" : "active",
     qrHash,
-    unlockables: { // This might need to be re-evaluated based on Supabase data
+    unlockables: { // This might need re-evaluation based on PocketBase data
       total: 3,
       unlocked: ticket.is_used ? 3 : 1,
     },
@@ -44,70 +41,71 @@ const mapTicketToDisplay = (ticket: Ticket) => {
 export function TicketGallery() {
   const [tickets, setTickets] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { isAuthenticated, userId } = useAuthStore(); // Get auth state from store
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkUserAndFetchTickets = async () => {
-      setIsLoading(true);
-      const user = await getCurrentUser();
-      setCurrentUser(user);
-
-      if (user) {
-        try {
-          const backendTickets = await supabaseApi.getUserTickets(user.id);
-          const formattedTickets = backendTickets.map(mapTicketToDisplay);
-          setTickets(formattedTickets);
-          setError(null);
-        } catch (err) {
-          console.error("Error fetching tickets:", err);
-          setTickets([]);
-          setError("Failed to load tickets.");
-        }
-      } else {
-        setTickets([]); // No user, no tickets
-      }
-      setIsLoading(false);
-    };
-
-    checkUserAndFetchTickets();
-
-    const authListener = onAuthStateChange(async (event: string, session: Session | null) => {
-      const user = session?.user ?? null;
-      setCurrentUser(user);
-      if (user) {
-        setIsLoading(true);
-        try {
-          const backendTickets = await supabaseApi.getUserTickets(user.id);
-          const formattedTickets = backendTickets.map(mapTicketToDisplay);
-          setTickets(formattedTickets);
-          setError(null);
-        } catch (err) {
-          console.error("Error fetching tickets on auth change:", err);
-          setTickets([]);
-          setError("Failed to load tickets.");
-        }
+    // Define the async function to fetch tickets
+    const fetchTickets = async () => {
+      // Check if user is authenticated and userId is available
+      if (!isAuthenticated || !userId) {
+        setTickets([]); // Clear tickets if not authenticated
         setIsLoading(false);
-      } else {
-        setTickets([]);
+        setError(null); // Clear any previous errors
+        return; // Exit if not authenticated
       }
-    });
 
-    return () => {
-      authListener.subscription?.unsubscribe();
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Fetch tickets using the PocketBase utility function
+        const backendTickets = await getUserTickets(userId); 
+        // Map the results to the display format
+        const formattedTickets = backendTickets.map(mapTicketToDisplay);
+        setTickets(formattedTickets);
+      } catch (err) {
+        console.error("Error fetching user tickets:", err);
+        setTickets([]); // Clear tickets on error
+        setError("Failed to load your tickets.");
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, []);
+
+    // Call fetchTickets when the component mounts or auth state changes
+    fetchTickets();
+
+  }, [isAuthenticated, userId]); // Dependency array ensures effect runs when auth state changes
 
   const upcomingTickets = tickets.filter((ticket) => {
-    const eventDateTime = new Date(`${ticket.eventDate} ${ticket.eventTime || '00:00:00'}`);
-    return eventDateTime >= new Date();
+     try {
+      // Combine date and a default time if time is missing/invalid for comparison
+      const eventDateTime = new Date(`${ticket.eventDate}T${ticket.eventTime || '00:00:00'}`);
+      // Get today's date at midnight for accurate comparison
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); 
+      return eventDateTime >= today;
+    } catch (e) {
+      console.warn("Error parsing ticket event date/time for filtering:", ticket.eventDate, ticket.eventTime, e);
+      return false; // Treat invalid dates as not upcoming
+    }
   });
   const pastTickets = tickets.filter((ticket) => {
-    const eventDateTime = new Date(`${ticket.eventDate} ${ticket.eventTime || '00:00:00'}`);
-    return eventDateTime < new Date();
+     try {
+      // Combine date and a default time if time is missing/invalid for comparison
+      const eventDateTime = new Date(`${ticket.eventDate}T${ticket.eventTime || '00:00:00'}`);
+      // Get today's date at midnight for accurate comparison
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); 
+      return eventDateTime < today;
+    } catch (e) {
+      console.warn("Error parsing ticket event date/time for filtering:", ticket.eventDate, ticket.eventTime, e);
+      return false; // Treat invalid dates as not past
+    }
   });
 
-  if (!currentUser && !isLoading) {
+  // Show login prompt if not authenticated (and not loading)
+  if (!isAuthenticated && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-secondary/50 rounded-full p-6 mb-6">
@@ -122,6 +120,7 @@ export function TicketGallery() {
     );
   }
 
+  // Show loading skeleton
   if (isLoading) {
     return (
       <div>
@@ -148,7 +147,8 @@ export function TicketGallery() {
       </div>
     );
   }
-
+  
+  // Show error message
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -160,7 +160,8 @@ export function TicketGallery() {
     )
   }
 
-  if (tickets.length === 0 && currentUser) {
+  // Show "No Tickets" message if authenticated and no tickets found
+  if (tickets.length === 0 && isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="bg-secondary/50 rounded-full p-6 mb-6">
@@ -177,6 +178,7 @@ export function TicketGallery() {
     );
   }
 
+  // Display tickets if loaded and user is authenticated
   return (
     <div>
       <Tabs defaultValue="upcoming">

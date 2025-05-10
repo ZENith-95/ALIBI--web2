@@ -1,8 +1,8 @@
 import Link from "next/link"
-import { Button } from "../components/ui/button"
-import { Badge } from "../components/ui/badge"
+import { Button } from "./ui/button" // Corrected path
+import { Badge } from "./ui/badge" // Corrected path
 import { Calendar, Clock, MapPin, Users } from "lucide-react"
-import type { Event } from "../lib/ic-api"
+import type { Event } from "@/app/types/data-types"; // Corrected path using alias
 
 interface EventCardProps {
   event: Event
@@ -16,7 +16,7 @@ export function EventCard({ event }: EventCardProps) {
     <div className="rounded-lg overflow-hidden border border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
       <div className="relative">
         <img
-          src={event.imageUrl || "/placeholder.svg?height=200&width=400&text=Event+Image"}
+          src={event.image_url || "/placeholder.svg?height=200&width=400&text=Event+Image"} 
           alt={event.name}
           className="w-full h-48 object-cover"
           crossOrigin="anonymous"
@@ -24,7 +24,7 @@ export function EventCard({ event }: EventCardProps) {
         <Badge className="absolute top-3 right-3" variant={isAlmostSoldOut ? "destructive" : "secondary"}>
           {isAlmostSoldOut ? "Almost Sold Out" : `${percentageSold}% Filled`}
         </Badge>
-        <Badge className="absolute top-3 left-3 bg-primary/20 text-primary border-primary/30">{event.artStyle}</Badge>
+        <Badge className="absolute top-3 left-3 bg-primary/20 text-primary border-primary/30">{event.art_style}</Badge> 
       </div>
       <div className="p-4">
         <h3 className="text-xl font-bold mb-2">{event.name}</h3>
@@ -55,4 +55,3 @@ export function EventCard({ event }: EventCardProps) {
     </div>
   )
 }
-

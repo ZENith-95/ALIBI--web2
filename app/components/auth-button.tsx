@@ -5,8 +5,16 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { LogIn, LogOut, Loader2, UserCircle } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "./ui/dialog";
-import useAuthStore from "../hooks/useAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from "./ui/dialog";
+import useAuthStore from "@/app/hooks/useAuth"; // Using path alias
 
 export function AuthButton() {
   const [email, setEmail] = useState("");
@@ -14,7 +22,32 @@ export function AuthButton() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const authState = useAuthStore();
-  const authenticated = authState.isAuthenticated;
+  // Destructure all needed state and actions from the store directly
+  const { 
+    isAuthenticated, 
+    processing: authProcessing, 
+    error: storeAuthError, 
+    user, // Destructure the user object
+    login, 
+    logout
+  } = authState;
+  
+  useEffect(() => {
+    if (storeAuthError) {
+      setAuthError(storeAuthError);
+    }
+  }, [storeAuthError]);
+
+  useEffect(() => {
+    if (isAuthenticated && isDialogOpen) {
+      setIsDialogOpen(false);
+      setEmail(""); // Clear form fields on successful login
+      setPassword("");
+      setAuthError(null); // Clear local error
+    }
+  }, [isAuthenticated, isDialogOpen]);
+
+  // const authenticated = authState.isAuthenticated; // Remove this line, use isAuthenticated from destructuring
   // useEffect(() => {
   //   const checkCurrentUser = async () => {
   //     setIsLoading(true);
@@ -41,7 +74,7 @@ export function AuthButton() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    await authState.login(email, password);
+    await login(email, password); // Call destructured login
     // if (error) {
     // setAuthError(error.message);
     // console.error("Login failed:", error);
@@ -53,16 +86,12 @@ export function AuthButton() {
   };
 
   const handleLogout = async () => {
-    setAuthError(null);
-    // const { error } = await signOut();
-    // if (error) {
-    //   setAuthError(error.message);
-    //   console.error("Logout failed:", error);
-    // }
-    // User state will be updated by onAuthStateChange
+    setAuthError(null); // Keep this to clear local errors if any
+    await logout(); // Call destructured logout
+    // State updates (isAuthenticated, email) are handled within the store
   };
 
-  if (authState.processing && !authenticated) {
+  if (authProcessing && !isAuthenticated) { // Use destructured variables
     return (
       <Button variant="outline" size="sm" disabled>
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -73,13 +102,18 @@ export function AuthButton() {
 
   return (
     <div>
-      {authenticated ? (
+      {isAuthenticated ? ( // Use destructured isAuthenticated
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:inline">
-            {authState.email?.substring(0, authState.email.indexOf('@'))}
+            {user?.email?.substring(0, user.email.indexOf("@"))} 
           </span>
-          <Button onClick={handleLogout} variant="outline" size="sm" disabled={authState.processing}>
-            {authState.processing ? (
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
+            disabled={authProcessing} // Use destructured authProcessing
+          >
+            {authProcessing ? ( // Use destructured authProcessing
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <LogOut className="mr-2 h-4 w-4" />
@@ -128,23 +162,35 @@ export function AuthButton() {
                   />
                 </div>
                 {authError && (
-                  <p className="col-span-4 text-red-500 text-sm text-center">{authError}</p>
+                  <p className="col-span-4 text-red-500 text-sm text-center">
+                    {authError}
+                  </p>
                 )}
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancel</Button>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
                 </DialogClose>
-                <Button type="submit" disabled={authState.processing}>
-                  {authState.processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
+                <Button type="submit" disabled={authProcessing}> 
+                  {authProcessing ? ( 
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogIn className="mr-2 h-4 w-4" />
+                  )}
                   Login
                 </Button>
               </DialogFooter>
             </form>
             {/* Basic Sign Up link - can be expanded later */}
             <p className="text-center text-sm mt-4">
-              Don't have an account?{' '}
-              <Button variant="link" className="p-0 h-auto" onClick={() => alert("Sign up functionality to be implemented")}>
+              Don't have an account?{" "}
+              <Button
+                variant="link"
+                className="p-0 h-auto"
+                onClick={() => alert("Sign up functionality to be implemented")}
+              >
                 Sign Up
               </Button>
             </p>

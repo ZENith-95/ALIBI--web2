@@ -8,15 +8,16 @@ import { Calendar, Plus, Ticket, Users, TrendingUp, QrCode } from "lucide-react"
 import { Progress } from "../ui/progress"
 import { Skeleton } from "../ui/skeleton"
 import Link from "next/link"
-import { EventList } from "./event-list" // Adjusted path
-import { EventAnalytics } from "./event-analytics" // Adjusted path
-import { User } from "@/app/types/data-types"
-import useAuthStore from "@/app/hooks/useAuth"
-import useEventStore from "@/app/hooks/useEvents"
+import { EventList } from "./event-list"
+import { EventAnalytics } from "./event-analytics"
+import type { Event as OrganizerEventType } from "../../types/data-types"; // Type import
+import useAuthStore from "../../hooks/useAuth";
+import useEventStore from "../../hooks/useEvents"; // Import the event store
 
-// Map Supabase event to frontend event display format
-const mapEventToDisplay = (event: OrganizerEvent) => {
-  // totalCapacity and ticketsSold are already calculated in supabaseApi.mapSupabaseEventToFrontend
+// Map PocketBase event to frontend event display format
+const mapEventToDisplay = (event: OrganizerEventType) => {
+  // totalCapacity and ticketsSold are already calculated in the enrichEventWithTicketData helper
+  // in app/utils/pocketbase/events.ts
   return {
     id: event.id.toString(),
     name: event.name,
@@ -31,80 +32,55 @@ const mapEventToDisplay = (event: OrganizerEvent) => {
 };
 
 export function OrganizerDashboard() {
-  const [isLoading, setIsLoading] = useState(true)
-  const authState = useAuthStore();
-  const eventsState = useEventStore();
-  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, userId } = useAuthStore();
+  const { events: rawEvents, loading, error, fetchOrganizerEvents } = useEventStore();
+  
+  // Local state for mapped events, if mapping is complex or needs to be memoized
+  const [displayedEvents, setDisplayedEvents] = useState<any[]>([]);
 
   useEffect(() => {
-    const checkUserAndFetchEvents = async () => {
-      setIsLoading(true);
-      const user = authState.user
+    if (isAuthenticated && userId) {
+      fetchOrganizerEvents(userId);
+    } else {
+      // Clear events if user logs out or is not authenticated
+      setDisplayedEvents([]); 
+    }
+  }, [isAuthenticated, userId, fetchOrganizerEvents]);
 
-      if (user) {
-        try {
-          const backendEvents = await eventsState.fetchEvents(user.id);
-        } catch (err) {
-          console.error("Error fetching events:", err);
-          setEvents([]);
-          setError("Failed to load events.");
-        }
-      } else {
-        setEvents([]); // No user, no events
-      }
-      setIsLoading(false);
-    };
+  useEffect(() => {
+    // Map events whenever rawEvents from the store changes
+    if (rawEvents) {
+      setDisplayedEvents(rawEvents.map(mapEventToDisplay));
+    }
+  }, [rawEvents]);
 
-    checkUserAndFetchEvents();
-
-    const authListener = onAuthStateChange(async (event: string, session: Session | null) => {
-      const user = session?.user ?? null;
-      setCurrentUser(user);
-      if (user) {
-        setIsLoading(true);
-        try {
-          const backendEvents = await supabaseApi.getOrganizerEvents(user.id);
-          const formattedEvents = backendEvents.map(mapEventToDisplay);
-          setEvents(formattedEvents);
-          setError(null);
-        } catch (err) {
-          console.error("Error fetching events on auth change:", err);
-          setEvents([]);
-          setError("Failed to load events.");
-        }
-        setIsLoading(false);
-      } else {
-        setEvents([]);
-      }
-    });
-
-    return () => {
-      authListener.subscription?.unsubscribe();
-    };
-  }, []);
-
-  // Calculate dashboard stats
-  const totalTicketsSold = events.reduce((sum, event) => sum + event.ticketsSold, 0)
-  const totalCapacity = events.reduce((sum, event) => sum + event.capacity, 0)
-  const percentageSold = totalCapacity > 0 ? Math.round((totalTicketsSold / totalCapacity) * 100) : 0
-  const activeEvents = events.filter((event) => {
-    const eventDate = new Date(event.date);
-    // Consider time as well if available, for now just date
-    return eventDate >= new Date(new Date().toDateString()); // Compare date part only
+  // Calculate dashboard stats from displayedEvents
+  const totalTicketsSold = displayedEvents.reduce((sum, event) => sum + (event.ticketsSold || 0), 0);
+  const totalCapacity = displayedEvents.reduce((sum, event) => sum + (event.capacity || 0), 0);
+  const percentageSold = totalCapacity > 0 ? Math.round((totalTicketsSold / totalCapacity) * 100) : 0;
+  const activeEvents = displayedEvents.filter((event) => {
+    try {
+      const eventDateTime = new Date(`${event.date}T${event.time || '00:00:00'}`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); 
+      return eventDateTime >= today;
+    } catch (e) {
+      console.warn("Error parsing event date/time for filtering:", event.date, event.time, e);
+      return false;
+    }
   }).length;
 
-
-  if (!currentUser && !isLoading) {
+  if (!isAuthenticated && !loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
-        <h2 className="text-2xl font-bold mb-2">Login to View Dashboard</h2>
+        <h2 className="text-2xl font-bold mb-2">Login Required</h2>
         <p className="text-muted-foreground max-w-md mb-6">
           Please log in to access the organizer dashboard.
         </p>
       </div>
     );
   }
-
+  
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -117,21 +93,17 @@ export function OrganizerDashboard() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {loading ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            {Array(3)
-              .fill(0)
-              .map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
-              ))}
+            {Array(3).fill(0).map((_, i) => (<Skeleton key={i} className="h-32 rounded-lg" />))}
           </div>
           <Skeleton className="h-[500px] rounded-lg" />
         </>
       ) : error ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
-        </div>
+         <div className="flex flex-col items-center justify-center py-16 text-center">
+            <h2 className="text-2xl font-bold mb-2 text-destructive">{error}</h2>
+         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -143,19 +115,20 @@ export function OrganizerDashboard() {
                 <div className="flex items-center">
                   <Ticket className="h-5 w-5 text-primary mr-2" />
                   <span className="text-2xl font-bold">
-                    {totalTicketsSold} / {totalCapacity}
+                    {totalTicketsSold} / {totalCapacity > 0 ? totalCapacity : 'N/A'}
                   </span>
                 </div>
-                <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1 text-xs">
-                    <span>Overall Capacity</span>
-                    <span>{percentageSold}%</span>
+                {totalCapacity > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1 text-xs">
+                      <span>Overall Capacity</span>
+                      <span>{percentageSold}%</span>
+                    </div>
+                    <Progress value={percentageSold} className="h-1.5" />
                   </div>
-                  <Progress value={percentageSold} className="h-1.5" />
-                </div>
+                )}
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Active Events</CardTitle>
@@ -167,11 +140,10 @@ export function OrganizerDashboard() {
                 </div>
                 <div className="flex items-center mt-2 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4 mr-1" />
-                  <span>{events.length - activeEvents} past events</span>
+                  <span>{displayedEvents.length - activeEvents} past events</span>
                 </div>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Attendees (Sold)</CardTitle>
@@ -188,19 +160,33 @@ export function OrganizerDashboard() {
               </CardContent>
             </Card>
           </div>
-
           <Tabs defaultValue="events">
             <TabsList className="mb-6">
               <TabsTrigger value="events">My Events</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
-
             <TabsContent value="events">
-              <EventList events={events} />
+              {displayedEvents.length > 0 ? (
+                 <EventList events={displayedEvents} />
+              ) : (
+                 <div className="text-center py-12">
+                    <h3 className="text-xl font-medium mb-2">No Events Found</h3>
+                    <p className="text-muted-foreground">You haven't created any events yet.</p>
+                    <Button asChild className="mt-4">
+                       <Link href="/organizer/create">Create Your First Event</Link>
+                    </Button>
+                 </div>
+              )}
             </TabsContent>
-
             <TabsContent value="analytics">
-              <EventAnalytics events={events} />
+              {displayedEvents.length > 0 ? (
+                 <EventAnalytics events={displayedEvents} />
+              ) : (
+                 <div className="text-center py-12">
+                    <h3 className="text-xl font-medium mb-2">No Analytics Available</h3>
+                    <p className="text-muted-foreground">Create events and sell tickets to see analytics.</p>
+                 </div>
+              )}
             </TabsContent>
           </Tabs>
         </>

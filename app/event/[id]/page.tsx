@@ -1,26 +1,29 @@
-import { EventDetails } from "../../../components/event-details"
-import { SiteHeader } from "../../../components/site-header"
-import { MobileNavigation } from "../../../components/mobile-navigation"
+"use client"; 
 
-export async function generateStaticParams() {
-  // Replace this with your actual data fetching logic
-  const events = await fetchEventsFromDatabase(); // Example: Fetch events from your database
-  return events.map((event) => ({
-    id: event.id.toString(), // The 'id' parameter must be a string
-  }));
-}
+import { EventDetails } from "../../components/event-details";
+import { SiteHeader } from "../../components/site-header";
+import { MobileNavigation } from "../../components/mobile-navigation";
+import { useParams } from 'next/navigation'; // Import useParams
 
-// Example function to fetch events (replace with your actual implementation)
-async function fetchEventsFromDatabase() {
-  // This is a placeholder - replace with your actual data fetching
-  return [
-    { id: 1, name: "Event 1" },
-    { id: 2, name: "Event 2" },
-    { id: 3, name: "Event 3" },
-  ];
-}
+// Removed generateStaticParams and fetchEventsFromDatabase as this is a Client Component
 
-export default function EventPage({ params }: { params: { id: string } }) {
+// Props type is no longer needed as params are accessed via hook
+// type Props = {
+//   params: { id: string };
+// };
+
+export default function EventPage() { // Remove params from props
+  const params = useParams<{ id: string }>(); // Use hook to get params
+
+  if (!params || !params.id) {
+    // Handle case where params or id might not be available, though Next.js usually ensures this for dynamic routes
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0F0F1A] to-[#1A1A2C] text-[#E0E0FF] flex items-center justify-center">
+        <p>Loading event...</p> {/* Or some error/loading state */}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0F0F1A] to-[#1A1A2C] text-[#E0E0FF]">
       <SiteHeader />
@@ -29,6 +32,5 @@ export default function EventPage({ params }: { params: { id: string } }) {
       </main>
       <MobileNavigation />
     </div>
-  )
+  );
 }
-

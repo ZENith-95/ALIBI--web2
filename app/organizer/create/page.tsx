@@ -1,6 +1,6 @@
-import { EventCreationForm } from "../../../components/organizer/event-creation-form"
-import { SiteHeader } from "../../../components/site-header"
-import { EnvChecker } from "../../../components/debug/env-checker"
+import { EventCreationForm } from "../../components/organizer/event-creation-form" // Corrected path
+import { SiteHeader } from "../../components/site-header" // Corrected path
+// EnvChecker import removed
 
 export default function CreateEventPage() {
   return (
@@ -9,12 +9,10 @@ export default function CreateEventPage() {
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Create New Event</h1>
         
-        {/* Add the environment checker in development mode */}
-        {process.env.NODE_ENV === "development" && <EnvChecker />}
+        {/* EnvChecker component removed */}
         
         <EventCreationForm />
       </main>
     </div>
   )
 }
-

@@ -1,35 +1,44 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "./ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card"
-import { Calendar, Clock, MapPin, Ticket, Users, Loader2, AlertCircle } from "lucide-react"
-import Image from "next/image"
-import { Skeleton } from "./ui/skeleton"
-import { supabaseApi, type Event, type MintTicketRequest, type TicketType } from "../lib/supabaseApi" // Updated import
-import { toast } from "./ui/use-toast"
-import { getCurrentUser } from "../../auth"; // Import auth functions
+import { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Ticket,
+  Users,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import Image from "next/image";
+import { Skeleton } from "./ui/skeleton";
+import { getEventById } from "@/app/utils/pocketbase/events"; // PocketBase import with alias
+import { mintTicket } from "@/app/utils/pocketbase/ticket"; // PocketBase import with alias
+import type { Event, MintTicketRequest, TicketType } from "@/app/types/data-types"; // Type imports with alias
+import { toast } from "./ui/use-toast";
+import useAuthStore from "@/app/hooks/useAuth"; // Use Zustand store for auth state with alias
 
 export function EventDetails({ eventId }: { eventId: string }) {
-  const [event, setEvent] = useState<Event | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isMinting, setIsMinting] = useState<string | null>(null) // Store ticketTypeId being minted
-  const [error, setError] = useState<string | null>(null)
-  const [currentUser, setCurrentUser] = useState<any>(null); // Store current user
+  const [event, setEvent] = useState<Event | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMinting, setIsMinting] = useState<string | null>(null); // Store ticketTypeId being minted
+  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, userId } = useAuthStore(); // Get userId from store
 
   useEffect(() => {
-    const fetchUserAndEvent = async () => {
+    const fetchEvent = async () => {
       setIsLoading(true);
       setError(null);
-      
-      // Fetch current user
-      const user = await getCurrentUser();
-      setCurrentUser(user);
-
-      // Fetch event details
       try {
-        // supabaseApi.getEvent expects string ID
-        const fetchedEvent = await supabaseApi.getEvent(eventId); 
+        const fetchedEvent = await getEventById(eventId); // Use PocketBase function
         if (fetchedEvent) {
           setEvent(fetchedEvent);
         } else {
@@ -43,14 +52,14 @@ export function EventDetails({ eventId }: { eventId: string }) {
       }
     };
 
-    fetchUserAndEvent();
+    fetchEvent();
   }, [eventId]);
 
   const handleMintTicket = async (ticketType: TicketType) => {
-    if (!currentUser) {
+    if (!isAuthenticated || !userId) { // Check auth state and userId from store
       toast({
         title: "Authentication Required",
-        description: "Please log in to get tickets.",
+        description: "Please log in to get tickets.", // Consider triggering login modal
         variant: "destructive",
       });
       return;
@@ -64,50 +73,24 @@ export function EventDetails({ eventId }: { eventId: string }) {
         event_id: event.id, // Use string ID
         ticket_type_id: ticketType.id, // Use string ID
       };
-      
-      const result = await supabaseApi.mintTicket(request);
 
-      if ('data' in result) {
-        toast({
-          title: "Ticket Acquired!",
-          description: `Successfully acquired ticket: ${ticketType.name}. Ticket ID: ${result.data}`,
-        });
-        // Optionally refetch event data to update sold counts
-        const updatedEvent = await supabaseApi.getEvent(eventId);
-        setEvent(updatedEvent);
-      } else if ('error' in result) {
-        let errorMessage = "Unknown error";
-        switch (result.error.type) {
-          case 'NotAuthorized':
-            errorMessage = "You must be logged in to acquire tickets.";
-            break;
-          case 'SoldOut':
-            errorMessage = `Sorry, tickets for "${ticketType.name}" are sold out.`;
-            break;
-          case 'NotFound':
-             errorMessage = "Ticket type or event not found.";
-             break;
-          case 'CannotModify':
-             errorMessage = "Cannot acquire ticket for this event (it might not be active).";
-             break;
-          case 'SystemError':
-            errorMessage = `System error: ${result.error.details ?? 'Please try again later.'}`; // Use nullish coalescing
-            break;
-          default:
-             // For other error types that don't have 'details'
-             errorMessage = `Failed to acquire ticket. Error: ${result.error.type}`;
-        }
-        toast({
-          title: "Error Acquiring Ticket",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
+      // Call PocketBase mint function, passing userId
+      const newTicketId = await mintTicket(request, userId); 
+
+      toast({
+        title: "Ticket Acquired!",
+        description: `Successfully acquired ticket: ${ticketType.name}. Ticket ID: ${newTicketId}`,
+      });
+
+      // Refetch event data to update sold counts
+      const updatedEvent = await getEventById(eventId);
+      setEvent(updatedEvent);
+    } catch (err: any) {
+      // Catch specific errors if needed
       console.error("Error minting ticket:", err);
       toast({
-        title: "Error",
-        description: "An unexpected error occurred while acquiring the ticket.",
+        title: "Error Acquiring Ticket",
+        description: err.message || "An unexpected error occurred.", // Display error message from utility
         variant: "destructive",
       });
     } finally {
@@ -122,15 +105,21 @@ export function EventDetails({ eventId }: { eventId: string }) {
   if (error) {
     return (
       <div className="container mx-auto py-12 text-center">
-         <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
+        <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
         <h2 className="text-2xl font-bold text-destructive mb-2">{error}</h2>
-        <p className="text-muted-foreground">Please check the event ID or try again later.</p>
+        <p className="text-muted-foreground">
+          Please check the event ID or try again later.
+        </p>
       </div>
     );
   }
 
   if (!event) {
-    return <div className="container mx-auto py-12 text-center">Event data could not be loaded.</div>;
+    return (
+      <div className="container mx-auto py-12 text-center">
+        Event data could not be loaded.
+      </div>
+    );
   }
 
   return (
@@ -139,7 +128,10 @@ export function EventDetails({ eventId }: { eventId: string }) {
         {/* Left Column: Image */}
         <div className="md:col-span-1">
           <Image
-            src={event.image_url || `/placeholder.svg?height=400&width=400&text=${encodeURIComponent(event.name)}`}
+            src={
+              event.image_url ||
+              `/placeholder.svg?height=400&width=400&text=${encodeURIComponent(event.name)}`
+            }
             alt={event.name}
             width={400}
             height={400}
@@ -150,7 +142,7 @@ export function EventDetails({ eventId }: { eventId: string }) {
         {/* Right Column: Details & Tickets */}
         <div className="md:col-span-2 space-y-6">
           <h1 className="text-3xl md:text-4xl font-bold">{event.name}</h1>
-          
+
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
@@ -176,22 +168,32 @@ export function EventDetails({ eventId }: { eventId: string }) {
             <CardContent className="space-y-4">
               {event.ticketTypes.length > 0 ? (
                 event.ticketTypes.map((ticketType) => (
-                  <div key={ticketType.id} className="flex items-center justify-between p-4 border border-border rounded-md bg-background hover:bg-accent/50 transition-colors">
+                  <div
+                    key={ticketType.id}
+                    className="flex items-center justify-between p-4 border border-border rounded-md bg-background hover:bg-accent/50 transition-colors"
+                  >
                     <div>
                       <h3 className="font-semibold">{ticketType.name}</h3>
                       <p className="text-sm text-muted-foreground">
                         {ticketType.description || "Standard ticket"}
                       </p>
                       <p className="text-sm font-medium mt-1">
-                        Price: {ticketType.price > 0 ? `${ticketType.price.toFixed(2)} Units` : "Free"} 
+                        Price:{" "}
+                        {ticketType.price > 0
+                          ? `${ticketType.price.toFixed(2)} Units`
+                          : "Free"}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {ticketType.capacity - ticketType.sold} / {ticketType.capacity} available
+                        {ticketType.capacity - ticketType.sold} /{" "}
+                        {ticketType.capacity} available
                       </p>
                     </div>
-                    <Button 
-                      onClick={() => handleMintTicket(ticketType)} 
-                      disabled={isMinting === ticketType.id || ticketType.sold >= ticketType.capacity}
+                    <Button
+                      onClick={() => handleMintTicket(ticketType)}
+                      disabled={
+                        isMinting === ticketType.id ||
+                        ticketType.sold >= ticketType.capacity
+                      }
                       size="sm"
                     >
                       {isMinting === ticketType.id ? (
@@ -199,12 +201,16 @@ export function EventDetails({ eventId }: { eventId: string }) {
                       ) : (
                         <Ticket className="mr-2 h-4 w-4" />
                       )}
-                      {ticketType.sold >= ticketType.capacity ? "Sold Out" : "Get Ticket"}
+                      {ticketType.sold >= ticketType.capacity
+                        ? "Sold Out"
+                        : "Get Ticket"}
                     </Button>
                   </div>
                 ))
               ) : (
-                <p className="text-muted-foreground">No ticket types available for this event.</p>
+                <p className="text-muted-foreground">
+                  No ticket types available for this event.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -217,34 +223,34 @@ export function EventDetails({ eventId }: { eventId: string }) {
 // Skeleton component for loading state
 function EventDetailsSkeleton() {
   return (
-     <div className="container mx-auto py-8 md:py-12">
+    <div className="container mx-auto py-8 md:py-12">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
-           <Skeleton className="rounded-lg w-full aspect-square" />
+          <Skeleton className="rounded-lg w-full aspect-square" />
         </div>
         <div className="md:col-span-2 space-y-6">
-           <Skeleton className="h-10 w-3/4" />
-           <div className="flex flex-wrap gap-x-6 gap-y-2">
-             <Skeleton className="h-5 w-24" />
-             <Skeleton className="h-5 w-16" />
-             <Skeleton className="h-5 w-32" />
-           </div>
-           <div className="space-y-2">
-             <Skeleton className="h-4 w-full" />
-             <Skeleton className="h-4 w-full" />
-             <Skeleton className="h-4 w-2/3" />
-           </div>
-           <Card>
-             <CardHeader>
-               <Skeleton className="h-6 w-1/4" />
-             </CardHeader>
-             <CardContent className="space-y-4">
-               <Skeleton className="h-20 w-full rounded-md" />
-               <Skeleton className="h-20 w-full rounded-md" />
-             </CardContent>
-           </Card>
+          <Skeleton className="h-10 w-3/4" />
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-32" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-1/4" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-20 w-full rounded-md" />
+              <Skeleton className="h-20 w-full rounded-md" />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
-  )
+  );
 }

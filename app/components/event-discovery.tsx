@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { EventCard } from "../components/event-card"
+import { EventCard } from "./event-card"; // Corrected relative path
 import { Input } from "./ui/input"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Search, Filter } from "lucide-react"
 import { Skeleton } from "./ui/skeleton"
-import { supabaseApi, type Event } from "../lib/supabaseApi" // Updated import
+import { getAllEvents } from "@/app/utils/pocketbase/events"; // Using path alias
+import type { Event } from "@/app/types/data-types"; // Using path alias
 
 export function EventDiscovery() {
   const [events, setEvents] = useState<Event[]>([])
@@ -20,7 +21,7 @@ export function EventDiscovery() {
     const fetchEvents = async () => {
       setIsLoading(true)
       try {
-        const fetchedEvents = await supabaseApi.getAllEvents() // Use supabaseApi
+        const fetchedEvents = await getAllEvents(); // Use PocketBase function
         setEvents(fetchedEvents)
       } catch (error) {
         console.error("Error fetching events:", error)

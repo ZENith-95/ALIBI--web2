@@ -16,14 +16,14 @@ import { Loader2, Check, Ticket } from "lucide-react"
 import { toast } from "./ui/use-toast"
 import { useRouter } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import type { Event } from "../lib/ic-api"
+import type { Event, TicketType as AppTicketType } from "@/app/types/data-types"; // Use alias and import TicketType
 
 interface TicketMintingDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   event: Event
-  onMint: () => Promise<bigint | null>
-  selectedTicketType: bigint | null
+  onMint: (selectedTicketTypeDetails: AppTicketType) => Promise<string | undefined> // Expects to return string ID or undefined
+  selectedTicketType: string | null // PocketBase IDs are strings
 }
 
 export function TicketMintingDialog({
@@ -35,11 +35,11 @@ export function TicketMintingDialog({
 }: TicketMintingDialogProps) {
   const router = useRouter()
   const [step, setStep] = useState<"style" | "generating" | "minting" | "success">("style")
-  const [selectedStyle, setSelectedStyle] = useState<string>(event?.artStyle || "cyberpunk")
+  const [selectedStyle, setSelectedStyle] = useState<string>(event?.art_style || "cyberpunk") // Use art_style
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
   const [selectedTicket, setSelectedTicket] = useState<number | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [ticketId, setTicketId] = useState<bigint | null>(null)
+  const [ticketId, setTicketId] = useState<string | null>(null) // PocketBase IDs are strings
 
   const handleGenerateTickets = useCallback(async () => {
     try {
@@ -88,10 +88,20 @@ export function TicketMintingDialog({
       setIsProcessing(true)
 
       // Call the onMint callback to mint the ticket
-      const mintedTicketId = await onMint()
+      // The onMint prop is now expected to be called from the parent (EventDetails)
+      // which will then call the actual mintTicket utility.
+      // This dialog should receive the selectedTicketType details.
+      const ticketTypeDetails = event.ticketTypes.find((tt) => tt.id === selectedTicketType);
+      if (!ticketTypeDetails) {
+        toast({ title: "Error", description: "Selected ticket type not found.", variant: "destructive" });
+        setIsProcessing(false);
+        return;
+      }
+
+      const mintedTicketId = await onMint(ticketTypeDetails); // Pass ticketTypeDetails to onMint
 
       if (mintedTicketId) {
-        setTicketId(mintedTicketId)
+        setTicketId(mintedTicketId); // Store string ID
         setStep("success")
         toast({
           title: "Ticket minted successfully",
@@ -165,7 +175,8 @@ export function TicketMintingDialog({
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{ticketTypeDetails?.name || "Standard Ticket"}</span>
                   <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
-                    {ticketTypeDetails ? (Number(ticketTypeDetails.price) / 100000000).toFixed(2) : "0.00"} ICP
+                    {/* Display price directly as a number, assuming it's stored appropriately */}
+                    {ticketTypeDetails ? ticketTypeDetails.price.toFixed(2) : "0.00"} Units 
                   </Badge>
                 </div>
               </div>
@@ -279,4 +290,3 @@ export function TicketMintingDialog({
     </Dialog>
   )
 }
-

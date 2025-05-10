@@ -1,6 +1,6 @@
-import { QRScanner } from "../../components/qr-scanner"
-import { SiteHeader } from "../../components/site-header"
-import { MobileNavigation } from "../../components/mobile-navigation"
+import { QRScanner } from "../components/qr-scanner" // Corrected path
+import { SiteHeader } from "../components/site-header" // Corrected path
+import { MobileNavigation } from "../components/mobile-navigation" // Corrected path
 
 export default function ScanPage() {
   return (
@@ -14,4 +14,3 @@ export default function ScanPage() {
     </div>
   )
 }
-

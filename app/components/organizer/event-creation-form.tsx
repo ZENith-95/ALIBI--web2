@@ -11,7 +11,9 @@ import { Plus, Trash, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "../ui/use-toast";
 import { useRouter } from "next/navigation";
-import { CreateEventRequest, supabaseApi } from "../../lib/supabaseApi"; // Updated import
+import { createEvent } from "../../utils/pocketbase/events"; // PocketBase import
+import type { CreateEventRequest } from "../../types/data-types"; // Type import
+import useAuthStore from "../../hooks/useAuth"; // Use Zustand store
 
 export function EventCreationForm() {
   const router = useRouter();
@@ -27,6 +29,7 @@ export function EventCreationForm() {
   const [eventLocation, setEventLocation] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventTime, setEventTime] = useState("");
+  const { isAuthenticated, userId } = useAuthStore(); // Get auth state
 
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, { name: "", price: "", capacity: "" }]);
@@ -90,45 +93,28 @@ export function EventCreationForm() {
         })),
       };
 
-      console.log("Creating event with data (Supabase):", request);
-
-      const result = await supabaseApi.createEvent(request); // Use supabaseApi
-
-      if ('data' in result) { // Check if 'data' property exists
-        toast({
-          title: "Event Created",
-          description: "Your event has been created successfully with ID: " + result.data,
-        });
-        router.push("/organizer");
-      } else if ('error' in result) { // Check if 'error' property exists
-        let errorMessage = "Unknown error";
-        // Adjust error mapping based on SupabaseApi Error type
-        switch (result.error.type) {
-          case 'NotAuthorized':
-            errorMessage = "You are not authorized to create events.";
-            break;
-          case 'InvalidInput':
-            errorMessage = "Invalid input data. Please check your form.";
-            break;
-          case 'SystemError':
-            errorMessage = `System error: ${result.error.details || 'Please try again later.'}`;
-            break;
-          default:
-             // For other error types that don't have 'details'
-             errorMessage = `An unexpected error occurred. Error type: ${result.error.type}`;
-        }
-        
-        toast({
-          title: "Error Creating Event",
-          description: errorMessage,
-          variant: "destructive",
-        });
+      if (!isAuthenticated || !userId) {
+         toast({ title: "Error", description: "You must be logged in to create an event.", variant: "destructive" });
+         setIsSubmitting(false);
+         return;
       }
-    } catch (error) {
+
+      console.log("Creating event with data (PocketBase):", request);
+
+      // Call PocketBase create function
+      const newEventId = await createEvent(request, userId); 
+
+      toast({
+        title: "Event Created",
+        description: "Your event has been created successfully with ID: " + newEventId,
+      });
+      router.push("/organizer"); // Redirect after successful creation
+
+    } catch (error: any) {
       console.error("Error creating event:", error);
       toast({
-        title: "Error",
-        description: "Failed to create event. Please try again.",
+        title: "Error Creating Event",
+        description: error.message || "Failed to create event. Please try again.",
         variant: "destructive",
       });
     } finally {
