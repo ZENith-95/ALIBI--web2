@@ -24,5 +24,9 @@
     "types": ["node", "react", "react-dom", "bun-types"] // Re-add types array
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "pocketbase-mcp-server", // Exclude the MCP server project
+    "CUsersAdministratorDocumentsClineMCP" // Exclude the strange directory if it contains .ts files
+  ]
 }
