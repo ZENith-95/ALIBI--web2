@@ -7,7 +7,7 @@ import { Button } from "./ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
+  DialogDescription as ShadDialogDescription, // Alias to avoid conflict if DialogDescription is used as a prop name
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -151,7 +151,7 @@ export function TicketMintingDialog({
         onOpenChange(newOpen)
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby={`mint-dialog-description-${step}`}>
         <DialogHeader>
           <DialogTitle>
             {step === "style" && "Choose Ticket Style"}
@@ -159,12 +159,12 @@ export function TicketMintingDialog({
             {step === "minting" && "Select & Mint Your Ticket"}
             {step === "success" && "Ticket Minted Successfully"}
           </DialogTitle>
-          <DialogDescription>
+          <ShadDialogDescription id={`mint-dialog-description-${step}`}>
             {step === "style" && "Select an art style for your AI-generated NFT ticket."}
             {step === "generating" && "Our AI is creating unique ticket designs for you..."}
             {step === "minting" && "Choose your favorite design to mint as an NFT ticket."}
             {step === "success" && "Your NFT ticket has been minted and added to your wallet."}
-          </DialogDescription>
+          </ShadDialogDescription>
         </DialogHeader>
 
         {step === "style" && (

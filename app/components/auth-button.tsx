@@ -13,6 +13,7 @@ import {
   DialogTrigger,
   DialogFooter,
   DialogClose,
+  DialogDescription, // Add DialogDescription
 } from "./ui/dialog";
 import useAuthStore from "@/app/hooks/useAuth"; // Using path alias
 
@@ -129,9 +130,12 @@ export function AuthButton() {
               Login
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px]" aria-describedby="login-dialog-description">
             <DialogHeader>
               <DialogTitle>Login</DialogTitle>
+              <DialogDescription id="login-dialog-description">
+                Enter your email and password to access your account.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleLogin}>
               <div className="grid gap-4 py-4">
